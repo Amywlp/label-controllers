@@ -39,7 +39,7 @@ jobs:
       - name: Validate Compose files
         run: docker compose -f compose.yaml -f compose.gpu.yaml config > /dev/null
       - name: Build image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
