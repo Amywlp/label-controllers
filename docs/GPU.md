@@ -50,7 +50,13 @@ GPU readiness must report:
 {
   "models": {
     "icon": {"device": "cuda"},
-    "ocr": {"device": "cuda", "provider": "CUDAExecutionProvider", "rec_batch_num": 12}
+    "ocr": {
+      "device": "cuda",
+      "provider": "CUDAExecutionProvider",
+      "rec_batch_num": 12,
+      "use_angle_cls": false,
+      "decoded_image_reuse": true
+    }
   }
 }
 ```
@@ -97,7 +103,9 @@ Expected highlights:
     "ocr": {
       "device": "directml",
       "provider": "DmlExecutionProvider",
-      "rec_batch_num": 12
+      "rec_batch_num": 12,
+      "use_angle_cls": false,
+      "decoded_image_reuse": true
     }
   }
 }
@@ -128,6 +136,7 @@ Expected highlights:
 | `LABEL_CONTROLLERS_DEVICE_INDEX` | integer | `0` | GPU index |
 | `LABEL_CONTROLLERS_OCR_DEVICE` | `auto`, `cpu`, `cuda`, `rocm`, `directml` | `auto` | ONNX Runtime execution provider |
 | `LABEL_CONTROLLERS_OCR_REC_BATCH_NUM` | integer; `0` means auto | `0` | OCR recognition batch; auto uses 12 on GPU and 6 on CPU |
+| `LABEL_CONTROLLERS_OCR_USE_ANGLE_CLS` | boolean | `false` | Enable RapidOCR 180-degree classification for rotated/upside-down text |
 
 `auto` prefers CUDA/ROCm, then Apple MPS, then DirectML, then CPU for torch. OCR chooses
 the matching GPU provider when the installed ONNX Runtime exposes it, otherwise CPU.
@@ -136,6 +145,12 @@ The OCR recognition batch is intentionally provider-aware: 12 on GPU and 6 on CP
 1.2.3, batch composition also determines the maximum aspect-ratio padding, so batch 12 is faster
 but can change a small number of recognized strings relative to batch 6. Set the environment
 variable to `6` when byte-for-byte output parity with the original CPU path is required.
+
+Angle classification is disabled by default because UI labels are normally upright. The
+decoded Pillow RGB image is passed directly to RapidOCR and fusion sizing, avoiding a second
+PNG decode. These defaults preserve output on the measured UI corpus and reduce DirectML
+end-to-end latency by 20.6%; see [BENCHMARKS.md](BENCHMARKS.md). Enable angle classification
+only when the target screenshots can contain upside-down text.
 
 Runtime information is available from:
 

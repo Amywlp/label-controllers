@@ -1,0 +1,182 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-10-30T05:32:00+0800",
+  "environment": {
+    "platform": "Windows-10-10.0.19045-SP0",
+    "python": "3.10.11",
+    "cpu": "AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
+    "logical_cpus": 12,
+    "ram_gb": 31.56,
+    "gpu": "AMD Radeon RX 7800 XT",
+    "directml_accelerator": "0.2.5.dev240914",
+    "directml_ocr_provider": "DmlExecutionProvider",
+    "cpu_ocr_provider": "CPUExecutionProvider"
+  },
+  "workload": {
+    "images": 12,
+    "resolution": "2558x1377",
+    "passes_per_configuration": 3,
+    "requests_per_configuration": 36
+  },
+  "ocr": {
+    "engine": "rapidocr-onnxruntime==1.2.3",
+    "models": "PP-OCRv3 Mobile",
+    "angle_classification": false,
+    "decoded_image_reuse": true,
+    "detector_limit_type": "min",
+    "detector_limit_side_len": 736
+  },
+  "results": {
+    "directml_batch12": {
+      "baseline_timing_seconds": {
+        "decode_and_normalize": 0.2562,
+        "icon": 0.0717,
+        "ocr": 0.4259,
+        "fusion": 0.0072,
+        "total": 0.7625
+      },
+      "candidate_timing_seconds": {
+        "decode_and_normalize": 0.262,
+        "icon": 0.0724,
+        "ocr": 0.263,
+        "fusion": 0.0068,
+        "total": 0.6056
+      },
+      "speed": {
+        "mean_speedup": 1.2591,
+        "latency_reduction_percent": 20.58
+      },
+      "ocr_stage_latency_reduction_percent": 38.25,
+      "accuracy_vs_baseline": {
+        "controls": {
+          "reference_count": 447,
+          "candidate_count": 447,
+          "matched": 447,
+          "missing": 0,
+          "extra": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "text_exact_accuracy_on_matches": 1.0,
+          "role_accuracy_on_matches": 1.0,
+          "mean_iou": 1.0,
+          "min_iou": 1.0,
+          "mean_click_distance_px": 0.0,
+          "max_click_distance_px": 0.0
+        },
+        "elements": {
+          "reference_count": 448,
+          "candidate_count": 448,
+          "matched": 448,
+          "missing": 0,
+          "extra": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "text_exact_accuracy_on_matches": 1.0,
+          "role_accuracy_on_matches": 1.0,
+          "mean_iou": 1.0,
+          "min_iou": 1.0,
+          "mean_click_distance_px": 0.0,
+          "max_click_distance_px": 0.0
+        },
+        "texts": {
+          "reference_count": 427,
+          "candidate_count": 427,
+          "matched": 427,
+          "missing": 0,
+          "extra": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "text_exact_accuracy_on_matches": 1.0,
+          "role_accuracy_on_matches": 1.0,
+          "mean_iou": 1.0,
+          "min_iou": 1.0,
+          "mean_click_distance_px": 0.0,
+          "max_click_distance_px": 0.0
+        },
+        "image_count": 12
+      }
+    },
+    "cpu_batch6": {
+      "baseline_timing_seconds": {
+        "decode_and_normalize": 0.2583,
+        "icon": 0.3924,
+        "ocr": 0.9038,
+        "fusion": 0.0072,
+        "total": 1.5644
+      },
+      "candidate_timing_seconds": {
+        "decode_and_normalize": 0.2615,
+        "icon": 0.3923,
+        "ocr": 0.8328,
+        "fusion": 0.0074,
+        "total": 1.4956
+      },
+      "speed": {
+        "mean_speedup": 1.046,
+        "latency_reduction_percent": 4.4
+      },
+      "ocr_stage_latency_reduction_percent": 7.86,
+      "accuracy_vs_baseline": {
+        "controls": {
+          "reference_count": 449,
+          "candidate_count": 449,
+          "matched": 449,
+          "missing": 0,
+          "extra": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "text_exact_accuracy_on_matches": 1.0,
+          "role_accuracy_on_matches": 1.0,
+          "mean_iou": 1.0,
+          "min_iou": 1.0,
+          "mean_click_distance_px": 0.0,
+          "max_click_distance_px": 0.0
+        },
+        "elements": {
+          "reference_count": 450,
+          "candidate_count": 450,
+          "matched": 450,
+          "missing": 0,
+          "extra": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "text_exact_accuracy_on_matches": 1.0,
+          "role_accuracy_on_matches": 1.0,
+          "mean_iou": 1.0,
+          "min_iou": 1.0,
+          "mean_click_distance_px": 0.0,
+          "max_click_distance_px": 0.0
+        },
+        "texts": {
+          "reference_count": 429,
+          "candidate_count": 429,
+          "matched": 429,
+          "missing": 0,
+          "extra": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "text_exact_accuracy_on_matches": 1.0,
+          "role_accuracy_on_matches": 1.0,
+          "mean_iou": 1.0,
+          "min_iou": 1.0,
+          "mean_click_distance_px": 0.0,
+          "max_click_distance_px": 0.0
+        },
+        "image_count": 12
+      }
+    }
+  },
+  "configuration": {
+    "LABEL_CONTROLLERS_OCR_USE_ANGLE_CLS": "false",
+    "LABEL_CONTROLLERS_OCR_REC_BATCH_NUM": "12 on DirectML; 6 on CPU",
+    "baseline": "e50f933",
+    "baseline_description": "angle classification enabled; RapidOCR re-reads the normalized PNG"
+  },
+  "note": "Both changes are output-preserving on the benchmark corpus. Exact parity is reported against the same backend and recognition batch size."
+}

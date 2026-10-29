@@ -10,6 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
+import numpy as np
 from PIL import Image, UnidentifiedImageError
 
 from .accelerator import resolve_ocr_provider, resolve_runtime_devices
@@ -98,7 +99,11 @@ class AnalysisEngine:
         # session failure on the current Windows AMD implementation.
         ocr_provider, _ = resolve_ocr_provider(settings.device, settings.ocr_device)
         rec_batch_num = settings.ocr_rec_batch_num or default_ocr_rec_batch_num(ocr_provider)
-        self.text_detector = TextDetector(provider=ocr_provider, rec_batch_num=rec_batch_num)
+        self.text_detector = TextDetector(
+            provider=ocr_provider,
+            rec_batch_num=rec_batch_num,
+            use_angle_cls=settings.ocr_use_angle_cls,
+        )
         self.ocr_warmup_seconds = round(self.text_detector.warmup(), 4)
 
         self.runtime = resolve_runtime_devices(
@@ -143,6 +148,8 @@ class AnalysisEngine:
                 "device": self.runtime.ocr_backend,
                 "provider": self.runtime.ocr_provider,
                 "rec_batch_num": self.text_detector.rec_batch_num,
+                "use_angle_cls": self.text_detector.use_angle_cls,
+                "decoded_image_reuse": True,
             },
             "runtime": runtime,
         }
@@ -181,19 +188,20 @@ class AnalysisEngine:
             started = time.perf_counter()
             with TemporaryDirectory(prefix="label-controllers-") as temp_dir:
                 canonical_path = Path(temp_dir) / "input.png"
-                decode_seconds = self._normalize_image(image_bytes, canonical_path)
+                decode_seconds, normalized_image = self._normalize_image(image_bytes, canonical_path)
+                image_size = (int(normalized_image.shape[1]), int(normalized_image.shape[0]))
                 icons, icon_seconds = self.icon_detector.predict(
                     canonical_path,
                     imgsz=self.settings.imgsz,
                     conf=icon_confidence if icon_confidence is not None else self.settings.icon_confidence,
                 )
                 texts, ocr_seconds = self.text_detector.predict(
-                    canonical_path,
+                    normalized_image,
                     min_confidence=ocr_confidence if ocr_confidence is not None else self.settings.ocr_confidence,
                 )
 
                 fusion_started = time.perf_counter()
-                fused = fuse_elements(icons, texts, tuple(fused_size(canonical_path)), screen_origin=(0, 0))
+                fused = fuse_elements(icons, texts, image_size, screen_origin=(0, 0))
                 fusion_seconds = time.perf_counter() - fusion_started
 
                 elements = [self._public_element(item) for item in fused["elements"]]
@@ -254,6 +262,8 @@ class AnalysisEngine:
                     raw_ocr={
                         "engine": "rapidocr-onnxruntime",
                         "provider": self.runtime.ocr_provider,
+                        "use_angle_cls": self.text_detector.use_angle_cls,
+                        "decoded_image_reuse": True,
                         "elapsed_seconds": round(ocr_seconds, 4),
                         "detections": texts,
                     },
@@ -261,7 +271,7 @@ class AnalysisEngine:
                     annotated_png=annotated_png,
                 )
 
-    def _normalize_image(self, raw: bytes, target: Path) -> float:
+    def _normalize_image(self, raw: bytes, target: Path) -> tuple[float, np.ndarray]:
         started = time.perf_counter()
         try:
             with warnings.catch_warnings():
@@ -273,12 +283,20 @@ class AnalysisEngine:
                             f"the limit is {self.settings.max_image_pixels:,}."
                         )
                     source.load()
-                    source.convert("RGB").save(target, format="PNG")
+                    rgb_image = source.convert("RGB")
+                    try:
+                        rgb_image.save(target, format="PNG")
+                        # RapidOCR consumes RGB ndarrays. Build it from the image
+                        # already decoded here instead of opening the normalized
+                        # PNG a second time inside the OCR pipeline.
+                        normalized_image = np.array(rgb_image, dtype=np.uint8, copy=True, order="C")
+                    finally:
+                        rgb_image.close()
         except ImageValidationError:
             raise
         except (UnidentifiedImageError, OSError, ValueError) as exc:
             raise ImageValidationError("Unsupported or corrupt image. Use PNG, JPEG, WEBP, BMP, or TIFF.") from exc
-        return time.perf_counter() - started
+        return time.perf_counter() - started, normalized_image
 
     @staticmethod
     def _image_format(raw: bytes) -> str:
@@ -303,8 +321,3 @@ class AnalysisEngine:
             "click": element["click"],
             "source": element["source"],
         }
-
-
-def fused_size(image_path: Path) -> tuple[int, int]:
-    with Image.open(image_path) as image:
-        return image.size

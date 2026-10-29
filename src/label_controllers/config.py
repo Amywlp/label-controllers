@@ -62,6 +62,7 @@ class Settings:
     device_index: int = 0
     ocr_device: str = "auto"
     ocr_rec_batch_num: int = 0
+    ocr_use_angle_cls: bool = False
 
     @property
     def max_upload_bytes(self) -> int:
@@ -92,4 +93,5 @@ class Settings:
             device_index=_as_int("LABEL_CONTROLLERS_DEVICE_INDEX", 0, minimum=0),
             ocr_device=_as_choice("LABEL_CONTROLLERS_OCR_DEVICE", "auto", OCR_DEVICE_CHOICES),
             ocr_rec_batch_num=_as_int("LABEL_CONTROLLERS_OCR_REC_BATCH_NUM", 0, minimum=0),
+            ocr_use_angle_cls=_as_bool(os.getenv("LABEL_CONTROLLERS_OCR_USE_ANGLE_CLS"), False),
         )

@@ -7,7 +7,6 @@ from typing import Any
 
 import cv2
 import numpy as np
-from PIL import Image
 
 _OCR_PROVIDERS: list[str] = ["CPUExecutionProvider"]
 _ACTIVATED_OCR_PROVIDERS: set[str] = set()
@@ -209,7 +208,12 @@ def _install_rapidocr_provider_override() -> None:
 
 
 class TextDetector:
-    def __init__(self, provider: str = "CPUExecutionProvider", rec_batch_num: int | None = None):
+    def __init__(
+        self,
+        provider: str = "CPUExecutionProvider",
+        rec_batch_num: int | None = None,
+        use_angle_cls: bool = False,
+    ):
         global _OCR_PROVIDERS
         _OCR_PROVIDERS = [provider]
         _ACTIVATED_OCR_PROVIDERS.clear()
@@ -220,9 +224,14 @@ class TextDetector:
         self.rec_batch_num = (
             rec_batch_num if rec_batch_num is not None and rec_batch_num > 0 else default_ocr_rec_batch_num(provider)
         )
+        self.use_angle_cls = use_angle_cls
         # RapidOCR 1.2.3 requires model_path to accompany other Rec overrides.
         # Passing None keeps its packaged PP-OCR model while changing batching.
-        self.engine = RapidOCR(rec_batch_num=self.rec_batch_num, rec_model_path=None)
+        self.engine = RapidOCR(
+            use_angle_cls=self.use_angle_cls,
+            rec_batch_num=self.rec_batch_num,
+            rec_model_path=None,
+        )
         self.session_providers = sorted(_ACTIVATED_OCR_PROVIDERS)
         if provider not in self.session_providers:
             raise RuntimeError(
@@ -231,12 +240,12 @@ class TextDetector:
             )
 
     def warmup(self) -> float:
-        """Exercise detection, classification and recognition sessions once."""
+        """Exercise detection/recognition, plus classification only when enabled."""
 
         started = time.perf_counter()
         canvas = np.full((720, 1280, 3), 255, dtype=np.uint8)
         # OpenCV's built-in font gives the detector a real text line, which also
-        # initializes the recognition and angle-classification sessions.
+        # initializes recognition and, when enabled, angle-classification sessions.
         cv2.putText(
             canvas,
             "Label Controllers 12345",
@@ -247,12 +256,16 @@ class TextDetector:
             5,
             cv2.LINE_AA,
         )
-        self.engine(canvas, use_det=True, use_cls=True, use_rec=True)
+        self.engine(canvas, use_det=True, use_cls=self.use_angle_cls, use_rec=True)
         return time.perf_counter() - started
 
-    def predict(self, image_path: str | Path, min_confidence: float = 0.40) -> tuple[list[dict[str, Any]], float]:
+    def predict(
+        self,
+        image: str | Path | np.ndarray,
+        min_confidence: float = 0.40,
+    ) -> tuple[list[dict[str, Any]], float]:
         started = time.perf_counter()
-        result, _ = self.engine(str(image_path), use_det=True, use_cls=True, use_rec=True)
+        result, _ = self.engine(image, use_det=True, use_cls=self.use_angle_cls, use_rec=True)
         elapsed = time.perf_counter() - started
         detections: list[dict[str, Any]] = []
         for index, row in enumerate(result or []):
@@ -274,8 +287,3 @@ class TextDetector:
                 }
             )
         return detections, elapsed
-
-
-def load_rgb(image_path: str | Path) -> np.ndarray:
-    with Image.open(image_path) as image:
-        return np.asarray(image.convert("RGB"))

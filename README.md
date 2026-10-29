@@ -22,6 +22,7 @@ GitHub 仓库：[Amywlp/label-controllers](https://github.com/Amywlp/label-contr
 - Docker 镜像在构建阶段自动下载并校验 `icon_detect.pt`。
 - CPU、NVIDIA CUDA、Windows DirectML 三种运行路径，共用同一 API 和输出格式。
 - 运行设备、显卡名称、OCR Execution Provider 和分阶段耗时均写入响应元数据。
+- OCR 路径默认跳过冗余角度分类，并直接复用已解码的 RGB 数组，减少重复解码。
 - 提供标准 OpenAI / Anthropic Tool Calling 定义、Python 执行器和命令行工具。
 - 提供 MCP stdio 服务，暴露 `list_desktop_windows` 和 `analyze_desktop_window` 两个窗口解析工具。
 - 原生 Windows Desktop Adapter：按 PID/进程启动时间/HWND/窗口类绑定窗口并截取客户区。
@@ -267,6 +268,7 @@ OpenCV 距离变换得到的建议点击点；`center` 是控件矩形中心。
 | `LABEL_CONTROLLERS_DEVICE_INDEX` | `0` | GPU 序号 |
 | `LABEL_CONTROLLERS_OCR_DEVICE` | `auto` | `auto/cpu/cuda/rocm/directml` |
 | `LABEL_CONTROLLERS_OCR_REC_BATCH_NUM` | `0` | OCR 识别批大小；`0` 自动选择 GPU 12、CPU 6 |
+| `LABEL_CONTROLLERS_OCR_USE_ANGLE_CLS` | `false` | 是否启用 RapidOCR 180° 角度分类；默认仅识别正向 UI 文本 |
 | `LABEL_CONTROLLERS_CORS_ORIGINS` | 空 | 逗号分隔的允许来源 |
 | `LABEL_CONTROLLERS_LOG_LEVEL` | `info` | 日志等级 |
 | `LABEL_CONTROLLERS_EXPOSE_DOCS` | `true` | 是否开放 `/docs` |
@@ -284,7 +286,7 @@ OpenCV 距离变换得到的建议点击点；`center` 是控件矩形中心。
 ```text
 multipart screenshot
         │
-        ├── Pillow 解码 / PNG 规范化 / 大小检查
+        ├── Pillow 解码 / RGB 数组复用 / PNG 规范化 / 大小检查
         ├── OmniParser v2 YOLO11m → icon boxes
         ├── RapidOCR (PP-OCR ONNX) → text boxes
         ├── IoU/containment 去重
@@ -360,6 +362,21 @@ OCR 阶段从 0.550 s 降至 0.478 s，端到端从 0.901 s 降至 0.834 s；但
 速度/输出一致性的可选折中，不再是逐字节一致；对比数据和退回 batch 6 的方法见
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md)。这些结果衡量后端一致性，不等同于外部人工
 标注数据集的绝对精度。
+
+### OCR 预处理优化（v0.5.0）
+
+在同一 12 张 2558×1377 截图、每配置 36 次请求的 A/B 重跑中，默认关闭角度分类并复用
+Pillow 已解码的 RGB 数组后：
+
+| 后端 | 优化前 | 优化后 | 变化 |
+|---|---:|---:|---:|
+| RX 7800 XT DirectML / batch 12 | 0.7625 s | **0.6056 s** | **降低 20.6%** |
+| CPU / batch 6 | 1.5644 s | **1.4956 s** | **降低 4.4%** |
+
+DirectML 的 OCR 阶段从 0.4259 s 降至 0.2630 s（降低 38.3%）。两种后端上的控件、融合元素
+和 OCR 文本块均为 0 缺失、0 多余、F1 1.0。若数据包含倒置文本，可设置
+`LABEL_CONTROLLERS_OCR_USE_ANGLE_CLS=true` 恢复角度分类。完整结果和复现命令见
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md)。
 
 ## 资源说明
 

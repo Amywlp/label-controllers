@@ -126,6 +126,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         ocr_device=args.ocr_device,
         device_index=args.device_index,
         ocr_rec_batch_num=args.ocr_rec_batch_num,
+        ocr_use_angle_cls=(settings.ocr_use_angle_cls if args.ocr_use_angle_cls is None else args.ocr_use_angle_cls),
     )
     engine = AnalysisEngine(settings)
     output = Path(args.output).expanduser().resolve()
@@ -186,6 +187,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "ocr_device": settings.ocr_device,
             "device_index": settings.device_index,
             "ocr_rec_batch_num": settings.ocr_rec_batch_num,
+            "ocr_use_angle_cls": settings.ocr_use_angle_cls,
             "imgsz": settings.imgsz,
             "images": [str(path) for path in images],
             "warmup_requests": args.warmup,
@@ -218,6 +220,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="OCR recognizer batch size; 0 auto-selects 12 on GPU and 6 on CPU.",
+    )
+    parser.add_argument(
+        "--ocr-use-angle-cls",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable or disable RapidOCR angle classification; defaults to the environment setting.",
     )
     parser.add_argument("--model", help="Override the YOLO model path")
     parser.add_argument("--imgsz", type=int, default=1280)

@@ -121,7 +121,9 @@ Response shape:
         "engine": "rapidocr-onnxruntime==1.2.3",
         "device": "cpu",
         "provider": "CPUExecutionProvider",
-        "rec_batch_num": 6
+        "rec_batch_num": 6,
+        "use_angle_cls": false,
+        "decoded_image_reuse": true
       },
       "runtime": {
         "backend": "cpu",
@@ -178,6 +180,11 @@ GPU deployments add richer values to `metadata.models.icon`, `metadata.models.oc
 `directml` / `DmlExecutionProvider` and `cuda` / `CUDAExecutionProvider`.
 `metadata.models.ocr.rec_batch_num` reports the effective recognition batch: 12 on GPU and
 6 on CPU unless `LABEL_CONTROLLERS_OCR_REC_BATCH_NUM` overrides it.
+`metadata.models.ocr.use_angle_cls` reports whether RapidOCR's 180-degree angle
+classifier is enabled. It defaults to `false` for upright UI screenshots and can be enabled with
+`LABEL_CONTROLLERS_OCR_USE_ANGLE_CLS=true`. `decoded_image_reuse: true` indicates that OCR
+consumes the RGB array produced during normalization instead of decoding the canonical PNG a
+second time.
 
 ### Base64 image example
 

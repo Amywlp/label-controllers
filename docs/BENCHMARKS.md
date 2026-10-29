@@ -167,11 +167,11 @@ Reproduce:
 ```powershell
 python scripts\benchmark.py --images "C:\frames\*.png" `
   --device directml --ocr-device directml --ocr-rec-batch-num 6 `
-  --repeat 3 --output artifacts\ocr-batch12\benchmark-b6.json
+  --ocr-use-angle-cls --repeat 3 --output artifacts\ocr-batch12\benchmark-b6.json
 
 python scripts\benchmark.py --images "C:\frames\*.png" `
   --device directml --ocr-device directml --ocr-rec-batch-num 12 `
-  --repeat 3 --output artifacts\ocr-batch12\benchmark-b12.json
+  --ocr-use-angle-cls --repeat 3 --output artifacts\ocr-batch12\benchmark-b12.json
 
 python scripts\compare_benchmarks.py `
   artifacts\ocr-batch12\benchmark-b6.json `
@@ -182,10 +182,68 @@ python scripts\compare_benchmarks.py `
 Machine-readable summary:
 [`benchmarks/amd-rx7800xt-directml-ocr-batch-v0.4.0.json`](benchmarks/amd-rx7800xt-directml-ocr-batch-v0.4.0.json).
 
+## OCR preprocessing: angle classifier and decoded-image reuse
+
+The v0.5.0 OCR path applies two output-preserving optimizations before recognition:
+
+1. RapidOCR's 180-degree angle classifier is disabled by default for upright UI text.
+2. The RGB image produced during Pillow normalization is passed directly to RapidOCR and
+   reused for fusion sizing, instead of decoding the canonical PNG a second time.
+
+The comparison used the same 12 screenshots and three measured passes per backend
+(36 requests per configuration). DirectML used batch 12 and CPU used batch 6.
+
+| Stage | DirectML baseline | DirectML optimized | Change |
+|---|---:|---:|---:|
+| Decode and normalize | 0.2562 s | 0.2620 s | +2.3% (array materialization moved here) |
+| YOLO icon detection | 0.0717 s | 0.0724 s | unchanged |
+| RapidOCR | 0.4259 s | 0.2630 s | **38.3% lower** |
+| Fusion | 0.0072 s | 0.0068 s | unchanged |
+| End-to-end mean | **0.7625 s** | **0.6056 s** | **1.259x faster, 20.6% lower latency** |
+
+On CPU, RapidOCR fell from 0.9038 s to 0.8328 s (7.9%) and end-to-end latency from
+1.5644 s to 1.4956 s (4.4%). YOLO dominates the CPU path, so the end-to-end effect is
+smaller there.
+
+Output parity against the same backend and batch size was exact on the corpus:
+
+| Backend | Clickable controls | OCR text blocks | Missing | Extra | F1 |
+|---|---:|---:|---:|---:|---:|
+| DirectML batch 12 | 447 -> 447 | 427 -> 427 | 0 | 0 | 1.000 |
+| CPU batch 6 | 449 -> 449 | 429 -> 429 | 0 | 0 | 1.000 |
+
+All matched boxes retained exact text, role and click coordinates. The angle classifier only
+predicts upside-down orientation; RapidOCR's existing tall-crop rotation remains active.
+If the target workload includes upside-down text, set
+`LABEL_CONTROLLERS_OCR_USE_ANGLE_CLS=true` to restore the classifier.
+
+The effective settings are reported in `metadata.models.ocr` and `metadata.raw_ocr` as
+`use_angle_cls` and `decoded_image_reuse`.
+
+Reproduce the optimized run for DirectML:
+
+```powershell
+python scripts\benchmark.py --images "C:\frames\*.png" `
+  --device directml --ocr-device directml --ocr-rec-batch-num 12 `
+  --no-ocr-use-angle-cls --repeat 3 `
+  --output artifacts\ocr-p0\optimized-directml.json
+```
+
+For the baseline, check out the pre-optimization commit `e50f933` in a separate worktree,
+set `PYTHONPATH` to that worktree's `src` directory, and run the same command without
+`--no-ocr-use-angle-cls`. For CPU, use `--device cpu --ocr-device cpu --ocr-rec-batch-num 6`.
+Compare the files with `scripts/compare_benchmarks.py`; the A/B measurements above used
+that script with IoU >= 0.5.
+
+Machine-readable summary:
+[`benchmarks/amd-rx7800xt-ocr-preprocessing-v0.5.0.json`](benchmarks/amd-rx7800xt-ocr-preprocessing-v0.5.0.json).
+
 ## Interpretation
 
 - DirectML provides a meaningful speed-up on the tested AMD GPU while preserving outputs
   when OCR batch 6 is selected; the default GPU batch 12 is a measured speed/accuracy trade-off.
+- Disabling the redundant angle classifier and reusing the normalized RGB array preserved
+  every output on the 12-image corpus while lowering DirectML end-to-end latency by 20.6%.
 - In the v0.2.0 run OCR accounted for about 61% of GPU-path request time and YOLO about 8%;
   OCR batching/provider behavior remains the highest-leverage optimization area.
 - Annotation rendering is CPU-bound. Rendering only on request already avoids paying that
