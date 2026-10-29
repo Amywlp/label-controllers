@@ -54,6 +54,25 @@ client -> HTTPS reverse proxy -> 127.0.0.1:8000 -> label-controllers container
 
 Do not publish the plain HTTP port directly to the public Internet.
 
+## Native Windows desktop adapter
+
+Window capture and mouse injection are deliberately not part of the Docker container.
+Run them in the same interactive Windows session that hosts the target application:
+
+```powershell
+.\scripts\run-windows-directml.ps1 -HostAddress 127.0.0.1 -Port 8011
+.\scripts\run-windows-desktop-adapter.ps1 `
+  -HostAddress 127.0.0.1 `
+  -Port 8022 `
+  -InferenceUrl http://127.0.0.1:8011 `
+  -EnableInput `
+  -EnableActivation
+```
+
+The adapter reuses the configured inference API key as its token fallback. Keep it on
+loopback, enable input only for trusted desktop sessions, and see [DESKTOP.md](DESKTOP.md)
+for selectors, coordinate conversion, action schemas and pointer-lock profiles.
+
 ## Container properties
 
 - The default image is CPU-only and requires no GPU runtime.

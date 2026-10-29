@@ -22,6 +22,10 @@ GitHub 仓库：[Amywlp/label-controllers](https://github.com/Amywlp/label-contr
 - Docker 镜像在构建阶段自动下载并校验 `icon_detect.pt`。
 - CPU、NVIDIA CUDA、Windows DirectML 三种运行路径，共用同一 API 和输出格式。
 - 运行设备、显卡名称、OCR Execution Provider 和分阶段耗时均写入响应元数据。
+- 提供标准 OpenAI / Anthropic Tool Calling 定义、Python 执行器和命令行工具。
+- 原生 Windows Desktop Adapter：按 PID/进程启动时间/HWND/窗口类绑定窗口并截取客户区。
+- 控件图像坐标自动转换为客户区坐标和虚拟桌面绝对坐标，包含 DPI、多显示器和负坐标处理。
+- `SendInput` 绝对鼠标与相对鼠标动作，支持指针锁定应用的按下、移动、抬起、滚轮和校准移动。
 - 可选 API Key 鉴权、上传大小限制、像素限制、CORS、OpenAPI 文档。
 
 ## 快速部署
@@ -65,6 +69,72 @@ NVIDIA Docker 需要 NVIDIA Container Toolkit。DirectML 方式已在 AMD Radeon
 不能直接用于 Linux Docker GPU 推理。CUDA 镜像已完成本地构建和只读容器接口冒烟测试，但仍需在目标 NVIDIA 主机验证 CUDA EP 实例与性能。
 
 完整配置、限制和故障排查见 [docs/GPU.md](docs/GPU.md)。
+
+## 非全屏窗口与鼠标接管
+
+新增原生 Windows Desktop Adapter，默认监听 `127.0.0.1:8022`。它不会替代推理 API，
+而是负责窗口枚举、客户区截图、坐标系转换和受控鼠标输入：
+
+```powershell
+# 先启动推理服务
+.\scripts\run-windows-directml.ps1 -Port 8011
+
+# 再启动窗口适配器
+.\scripts\run-windows-desktop-adapter.ps1 `
+  -Port 8022 `
+  -InferenceUrl http://127.0.0.1:8011 `
+  -EnableInput `
+  -EnableActivation
+```
+
+- 通过 `window_id`、`pid`、`process_name`、`class_name`、`title_regex` 唯一绑定窗口。
+- 默认截取客户区，不包含标题栏、阴影或周围桌面。
+- 模型输出的 `controls[].click` 会附加 `client_click` 和 `screen_click` 绝对坐标。
+- `absolute` 模式使用 `MOUSEEVENTF_ABSOLUTE | VIRTUALDESK`，支持多显示器和负坐标。
+- `relative` / `aim` 模式面向 ClipCursor、Raw Input、隐藏光标或指针锁定应用。
+- 执行前校验窗口身份、前台焦点、客户区几何和裁剪区域，避免窗口移动后误点。
+- Docker 不能操作宿主机窗口；该适配器必须在 Windows 交互式桌面中原生运行。
+
+完整 API、动作模型、鼠标校准和安全限制见 [docs/DESKTOP.md](docs/DESKTOP.md)。
+
+## 标准 Tool Calling
+
+服务提供与 OpenAI Chat Completions / Responses 兼容的函数工具，同时返回 Anthropic
+Messages 格式：
+
+```http
+GET /api/v1/tools
+```
+
+工具名为 `analyze_ui_screenshot`。语言模型只选择输出字段、置信度和是否标注；当前截图由
+工具执行器绑定，模型不需要生成图片 Base64。
+
+Python 客户端：
+
+```python
+from label_controllers.tool import LabelControllersTool
+
+tool = LabelControllersTool(
+    base_url="http://127.0.0.1:8000",
+    screenshot_provider=lambda: screenshot_bytes,
+)
+result = tool.execute_tool_call({
+    "include": ["controls", "texts", "metadata"],
+    "annotate": False,
+})
+```
+
+OpenAI SDK 传递 `tools=[tool.definition]` 即可；完整示例见
+[examples/openai_tool_call.py](examples/openai_tool_call.py)。
+
+命令行：
+
+```bash
+label-controllers-tool --schema
+label-controllers-tool --image screenshot.png --include controls,texts,metadata
+```
+
+完整参数、错误结构和集成方式见 [docs/TOOL.md](docs/TOOL.md)。
 
 ## 调用示例
 
@@ -135,11 +205,12 @@ OpenCV 距离变换得到的建议点击点；`center` 是控件矩形中心。
 | `GET` | `/healthz` | 进程存活检查 |
 | `GET` | `/readyz` | 模型已加载与运行状态 |
 | `GET` | `/api/v1/capabilities` | 字段、格式和限制说明 |
+| `GET` | `/api/v1/tools` | OpenAI / Anthropic 标准工具定义 |
 | `POST` | `/api/v1/analyze` | 上传截图并分析 |
 | `GET` | `/docs` | Swagger UI |
 | `GET` | `/openapi.json` | OpenAPI 3 文档 |
 
-完整字段定义和响应示例见 [docs/API.md](docs/API.md)。
+完整字段定义和响应示例见 [docs/API.md](docs/API.md)。窗口截图、PID 绑定、绝对/相对鼠标动作见 [docs/DESKTOP.md](docs/DESKTOP.md)。
 
 ## 环境变量
 
@@ -160,6 +231,9 @@ OpenCV 距离变换得到的建议点击点；`center` 是控件矩形中心。
 | `LABEL_CONTROLLERS_CORS_ORIGINS` | 空 | 逗号分隔的允许来源 |
 | `LABEL_CONTROLLERS_LOG_LEVEL` | `info` | 日志等级 |
 | `LABEL_CONTROLLERS_EXPOSE_DOCS` | `true` | 是否开放 `/docs` |
+| `LABEL_CONTROLLERS_DESKTOP_PORT` | `8022` | 原生 Windows Desktop Adapter 端口 |
+| `LABEL_CONTROLLERS_DESKTOP_ALLOW_INPUT` | `false` | 是否允许鼠标注入 |
+| `LABEL_CONTROLLERS_DESKTOP_ALLOW_ACTIVATE` | `false` | 是否允许自动激活目标窗口 |
 
 ## 架构
 
@@ -185,9 +259,12 @@ src/label_controllers/
 ├── accelerator.py  # CPU / CUDA / DirectML 设备解析
 ├── engine.py       # 常驻模型、图片校验、分析编排
 ├── detectors.py    # YOLO / RapidOCR 封装
+├── contracts.py    # 公共响应字段契约
+├── tool.py         # OpenAI / Anthropic 工具客户端与 CLI
 ├── fusion.py       # 控件与文字融合
 ├── annotation.py   # 标注图渲染
 ├── config.py       # 环境变量配置
+├── desktop/        # 原生 Windows 窗口截图、坐标转换与鼠标输入
 └── cli.py          # 本地图片命令行
 ```
 

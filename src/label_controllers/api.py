@@ -20,12 +20,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
 from .config import Settings
-from .engine import (
-    PUBLIC_INCLUDES,
-    AnalysisEngine,
-    ImageTooLargeError,
-    ImageValidationError,
-)
+from .contracts import PUBLIC_INCLUDES
+from .engine import AnalysisEngine, ImageTooLargeError, ImageValidationError
+from .tool import TOOL_NAME, anthropic_tool_schema, openai_tool_schema
 
 logger = logging.getLogger("label_controllers.api")
 settings = Settings.from_env()
@@ -197,6 +194,8 @@ async def root() -> dict[str, Any]:
         "endpoints": {
             "analyze": "POST /api/v1/analyze",
             "capabilities": "GET /api/v1/capabilities",
+            "tools": "GET /api/v1/tools",
+            "desktop_adapter": "native Windows service, default http://127.0.0.1:8022",
             "readiness": "GET /readyz",
         },
     }
@@ -252,6 +251,49 @@ async def capabilities(request: Request) -> dict[str, Any]:
         },
         "coordinates": "Pixel coordinates are relative to the uploaded image's top-left corner.",
         "authentication": "If an API key is configured, send Authorization: Bearer <key> or X-API-Key: <key>.",
+        "desktop_adapter": {
+            "service": "label-controllers-desktop",
+            "distribution": "separate native Windows process; unavailable inside Docker",
+            "default_loopback_url": "http://127.0.0.1:8022",
+            "features": [
+                "window binding by id, pid, process name, class name or title regex",
+                "client-area capture",
+                "image-to-client-and-screen coordinate conversion",
+                "guarded absolute and relative mouse actions",
+            ],
+            "documentation": "docs/DESKTOP.md",
+        },
+        "tools": {
+            "discovery": "/api/v1/tools",
+            "openai_tool_name": TOOL_NAME,
+            "python_client": "label_controllers.tool:LabelControllersTool",
+        },
+    }
+
+
+@app.get("/api/v1/tools", tags=["Metadata"])
+async def tools() -> dict[str, Any]:
+    """Return OpenAI- and Anthropic-compatible tool definitions.
+
+    The caller's tool executor binds or captures the current screenshot and
+    forwards it to `/api/v1/analyze`; the model only chooses analysis options.
+    """
+
+    return {
+        "schema_version": "1.0",
+        "tools": [openai_tool_schema()],
+        "anthropic_tools": [anthropic_tool_schema()],
+        "execution": {
+            "endpoint": "/api/v1/analyze",
+            "transport": "multipart/form-data",
+            "image_field": "file",
+            "image_handling": (
+                "The tool host supplies the current screenshot bytes. "
+                "The model should call the tool without generating image data."
+            ),
+            "python_client": "label_controllers.tool:LabelControllersTool",
+            "cli": "label-controllers-tool",
+        },
     }
 
 

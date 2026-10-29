@@ -18,16 +18,6 @@ from .config import Settings
 from .detectors import IconDetector, TextDetector
 from .fusion import fuse_elements
 
-PUBLIC_INCLUDES = (
-    "controls",
-    "elements",
-    "texts",
-    "metadata",
-    "raw_icons",
-    "raw_ocr",
-    "annotated_image",
-)
-
 
 class ImageValidationError(ValueError):
     """Raised when an uploaded image is empty or unsupported."""

@@ -15,7 +15,8 @@ Describe how you verified the change. Do not attach private screenshots or secre
 ## Checklist
 
 - [ ] No secrets, model weights, local test content or generated artifacts are included
-- [ ] `ruff check src scripts` passes
-- [ ] `python -m compileall -q src scripts` passes
+- [ ] `ruff check src scripts examples` passes
+- [ ] `python -m compileall -q src scripts examples` passes
 - [ ] CPU/GPU and DirectML/CUDA behavior verified or explicitly noted
+- [ ] Windows desktop capture/input changes smoke-tested in an interactive Windows session
 - [ ] Documentation updated when needed

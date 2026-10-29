@@ -7,7 +7,8 @@ import uuid
 from pathlib import Path
 
 from .config import Settings
-from .engine import PUBLIC_INCLUDES, AnalysisEngine, ImageValidationError
+from .contracts import PUBLIC_INCLUDES
+from .engine import AnalysisEngine, ImageValidationError
 
 
 def _includes(value: str) -> set[str]:

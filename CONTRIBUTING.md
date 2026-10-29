@@ -17,10 +17,11 @@ python scripts/download_model.py
 
 - Keep changes focused and explain the user-visible behavior.
 - Do not add model weights, screenshots, secrets, local test output or generated artifacts.
-- Update `README.md`, `docs/API.md` or `docs/GPU.md` when an API/backend contract changes.
+- Update `README.md`, `docs/API.md`, `docs/GPU.md` or `docs/DESKTOP.md` when an API/backend contract changes.
 - Preserve the public JSON fields unless a versioned breaking change is intentional.
-- Run `ruff check src scripts` and `python -m compileall -q src scripts` before pushing.
+- Run `ruff check src scripts examples` and `python -m compileall -q src scripts examples` before pushing.
 - Include a short manual test note in the pull request template.
+- Windows capture/input changes require an interactive Windows smoke test; GitHub-hosted Linux runners cannot validate Win32 desktop behavior.
 
 ## API compatibility
 

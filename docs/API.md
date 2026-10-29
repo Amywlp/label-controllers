@@ -8,6 +8,12 @@ http://127.0.0.1:8000
 
 Interactive OpenAPI documentation is available at `/docs`.
 
+The optional native Windows desktop adapter is a separate service on
+`http://127.0.0.1:8022` by default. It adds window enumeration, client-area capture,
+image-to-screen coordinate conversion and guarded mouse actions. See
+[DESKTOP.md](DESKTOP.md); the Docker inference API remains stateless and never controls
+the host mouse.
+
 ## Authentication
 
 Authentication is optional in development and recommended for every exposed deployment.
@@ -231,9 +237,24 @@ The response has `Content-Type: image/png` and includes:
 
 ## `GET /api/v1/capabilities`
 
-Returns supported fields, formats, upload limits, authentication notes, and the active
+Returns supported fields, formats, upload limits, authentication notes, the active
 `compute` runtime object (`backend`, `device_name`, `is_gpu`, torch version, device index and
-OCR provider). It does not run inference.
+OCR provider), and the standard tool discovery location. It does not run inference.
+
+## `GET /api/v1/tools`
+
+Returns standard tool definitions for the current API:
+
+- `tools`: OpenAI Chat Completions / Responses tool array.
+- `anthropic_tools`: Anthropic Messages tool definitions.
+- `execution`: the multipart endpoint and image-binding contract used by the local executor.
+
+The single tool is named `analyze_ui_screenshot`. Its schema exposes `include`,
+`annotate`, `icon_confidence` and `ocr_confidence`. The current screenshot is supplied by
+the trusted tool host through `LabelControllersTool.screenshot_provider`; the model does not
+generate or transport screenshot bytes.
+
+See [TOOL.md](TOOL.md) for Python, OpenAI and CLI examples.
 
 ## `GET /healthz`
 

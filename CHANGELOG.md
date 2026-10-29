@@ -3,6 +3,49 @@
 All notable changes are documented here. The project follows semantic versioning once
 a tagged public release exists.
 
+## [0.4.0] - 2026-10-30
+
+### Added
+
+- Native Windows Desktop Adapter with stable application binding through `window_id`, PID,
+  process start time, HWND, executable name and window class.
+- Client-area capture through `PrintWindow`, with a foreground-only screen fallback.
+- Per-monitor DPI-aware conversion from recognized image coordinates to client and virtual
+  desktop physical coordinates.
+- Stateful desktop sessions with frame IDs, geometry hashes, target revalidation and
+  foreground guards.
+- Guarded `SendInput` mouse actions for absolute movement, relative movement, clicks,
+  drags, wheel input and held-button sequences.
+- Pointer-lock/mouse-capture profiles using ClipCursor detection, relative gain,
+  movement chunking and image-to-relative `aim` actions.
+- `label-controllers-desktop` executable and `scripts/run-windows-desktop-adapter.ps1`.
+- Desktop integration tests on real Win32/Tk windows, including exact absolute-coordinate
+  click delivery and relative pointer-lock clicks.
+
+### Changed
+
+- Version bumped to `0.4.0`.
+- Docker remains inference-only; destructive desktop operations are exposed only by the
+  native Windows adapter on a loopback address by default.
+
+## [0.3.0] - 2026-10-30
+
+### Added
+
+- OpenAI Chat Completions / Responses-compatible `analyze_ui_screenshot` tool definition.
+- Anthropic Messages tool definition generated from the same JSON Schema.
+- `GET /api/v1/tools` tool discovery endpoint.
+- `LabelControllersTool` Python executor with screenshot-provider binding, validation and
+  structured `ToolCallError` handling.
+- `label-controllers-tool` CLI and `python -m label_controllers.tool` entry points.
+- End-to-end OpenAI function-calling example in `examples/openai_tool_call.py`.
+- Dedicated tool integration documentation in `docs/TOOL.md`.
+
+### Changed
+
+- Shared response-field constants moved to `label_controllers.contracts`.
+- Version bumped to `0.3.0`.
+
 ## [0.2.0] - 2026-10-30
 
 ### Added
