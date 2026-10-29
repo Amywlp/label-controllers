@@ -3,6 +3,24 @@
 All notable changes are documented here. The project follows semantic versioning once
 a tagged public release exists.
 
+## [0.3.0] - 2026-10-30
+
+### Added
+
+- OpenAI Chat Completions / Responses-compatible `analyze_ui_screenshot` tool definition.
+- Anthropic Messages tool definition generated from the same JSON Schema.
+- `GET /api/v1/tools` tool discovery endpoint.
+- `LabelControllersTool` Python executor with screenshot-provider binding, validation and
+  structured `ToolCallError` handling.
+- `label-controllers-tool` CLI and `python -m label_controllers.tool` entry points.
+- End-to-end OpenAI function-calling example in `examples/openai_tool_call.py`.
+- Dedicated tool integration documentation in `docs/TOOL.md`.
+
+### Changed
+
+- Shared response-field constants moved to `label_controllers.contracts`.
+- Version bumped to `0.3.0`.
+
 ## [0.2.0] - 2026-10-30
 
 ### Added
