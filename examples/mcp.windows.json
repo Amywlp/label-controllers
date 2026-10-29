@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "label-controllers-desktop": {
+      "command": "C:\\path\\to\\label-controllers\\.venv-directml\\Scripts\\python.exe",
+      "args": [
+        "C:\\path\\to\\label-controllers\\scripts\\run_mcp_server.py",
+        "--log-level",
+        "warning"
+      ]
+    }
+  }
+}

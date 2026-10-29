@@ -23,6 +23,7 @@ GitHub 仓库：[Amywlp/label-controllers](https://github.com/Amywlp/label-contr
 - CPU、NVIDIA CUDA、Windows DirectML 三种运行路径，共用同一 API 和输出格式。
 - 运行设备、显卡名称、OCR Execution Provider 和分阶段耗时均写入响应元数据。
 - 提供标准 OpenAI / Anthropic Tool Calling 定义、Python 执行器和命令行工具。
+- 提供 MCP stdio 服务，暴露 `list_desktop_windows` 和 `analyze_desktop_window` 两个窗口解析工具。
 - 原生 Windows Desktop Adapter：按 PID/进程启动时间/HWND/窗口类绑定窗口并截取客户区。
 - 控件图像坐标自动转换为客户区坐标和虚拟桌面绝对坐标，包含 DPI、多显示器和负坐标处理。
 - `SendInput` 绝对鼠标与相对鼠标动作，支持指针锁定应用的按下、移动、抬起、滚轮和校准移动。
@@ -96,6 +97,43 @@ NVIDIA Docker 需要 NVIDIA Container Toolkit。DirectML 方式已在 AMD Radeon
 - Docker 不能操作宿主机窗口；该适配器必须在 Windows 交互式桌面中原生运行。
 
 完整 API、动作模型、鼠标校准和安全限制见 [docs/DESKTOP.md](docs/DESKTOP.md)。
+
+## MCP 桌面窗口服务
+
+仓库包含一个 MCP stdio bridge，把 Windows Desktop Adapter 封装成两个模型工具：
+
+- `list_desktop_windows`：按 PID、进程名、窗口类或标题正则枚举窗口，返回稳定 `window_id`。
+- `analyze_desktop_window`：绑定指定窗口、截取客户区并调用现有推理 API，返回控件、OCR、
+  `client_click`、`screen_click` 和坐标空间。每次调用都会自动关闭临时 Desktop session。
+  请求标注图时，MCP 结果会同时返回 JSON 文本和标准 `image` content block。
+
+MCP 进程只代理已有的 Desktop Adapter，不复制 Win32 和坐标逻辑，也不暴露鼠标注入工具：
+
+```text
+MCP Host -> label-controllers-mcp (stdio) -> Desktop Adapter :8022 -> Inference API :8011
+```
+
+客户端配置示例：
+
+```json
+{
+  "mcpServers": {
+    "label-controllers-desktop": {
+      "command": "C:\\path\\to\\label-controllers\\.venv-directml\\Scripts\\python.exe",
+      "args": [
+        "C:\\path\\to\\label-controllers\\scripts\\run_mcp_server.py",
+        "--log-level",
+        "warning"
+      ]
+    }
+  }
+}
+```
+
+launcher 会静默读取仓库 `.env`，因此 token 不需要写入客户端配置。MCP 的 stdout 仅承载
+newline-delimited JSON-RPC，日志全部写入 stderr。完整配置、工具参数、安全限制和故障排查见
+[docs/MCP.md](docs/MCP.md)，可复制配置模板见
+[examples/mcp.windows.json](examples/mcp.windows.json)。
 
 ## 标准 Tool Calling
 
@@ -235,6 +273,11 @@ OpenCV 距离变换得到的建议点击点；`center` 是控件矩形中心。
 | `LABEL_CONTROLLERS_DESKTOP_PORT` | `8022` | 原生 Windows Desktop Adapter 端口 |
 | `LABEL_CONTROLLERS_DESKTOP_ALLOW_INPUT` | `false` | 是否允许鼠标注入 |
 | `LABEL_CONTROLLERS_DESKTOP_ALLOW_ACTIVATE` | `false` | 是否允许自动激活目标窗口 |
+| `LABEL_CONTROLLERS_MCP_DESKTOP_URL` | `http://127.0.0.1:8022` | MCP 连接的 Desktop Adapter 地址 |
+| `LABEL_CONTROLLERS_MCP_DESKTOP_TOKEN` | 空 | MCP 专用 Desktop token；不设置时回退 Desktop/API token |
+| `LABEL_CONTROLLERS_MCP_TOKEN_FILE` | 空 | 仅包含 Desktop token 的文件路径，便于 MCP 客户端安全加载 |
+| `LABEL_CONTROLLERS_MCP_TIMEOUT_SECONDS` | `180` | MCP 分析请求读超时 |
+| `LABEL_CONTROLLERS_MCP_LOG_LEVEL` | `info` | MCP stderr 日志级别 |
 
 ## 架构
 

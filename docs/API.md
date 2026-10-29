@@ -13,6 +13,8 @@ The optional native Windows desktop adapter is a separate service on
 image-to-screen coordinate conversion and guarded mouse actions. See
 [DESKTOP.md](DESKTOP.md); the Docker inference API remains stateless and never controls
 the host mouse.
+For model/Agent integration, the native adapter also has an MCP stdio bridge exposing
+`list_desktop_windows` and `analyze_desktop_window`; see [MCP.md](MCP.md).
 
 ## Authentication
 

@@ -41,6 +41,10 @@
 
 Swagger UI 位于 `http://127.0.0.1:8022/docs`。
 
+模型/Agent 集成可直接使用仓库内置的 MCP stdio bridge，它把窗口枚举和指定窗口解析暴露为
+`list_desktop_windows` 与 `analyze_desktop_window`。启动、客户端配置和安全限制见
+[MCP.md](MCP.md)。
+
 ## 启动
 
 先启动推理服务，例如本机 DirectML：

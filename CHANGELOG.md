@@ -7,6 +7,12 @@ a tagged public release exists.
 
 ### Added
 
+- MCP stdio server exposing `list_desktop_windows` and `analyze_desktop_window`
+  as a bridge over the native Windows Desktop Adapter.
+- PID/process/class/title/window-ID target selection, automatic desktop-session
+  cleanup, structured MCP tool errors, and annotated-image MCP content-block passthrough.
+- `label-controllers-mcp` executable, `scripts/run_mcp_server.py` quiet launcher,
+  MCP client example, and `docs/MCP.md`.
 - Provider-aware OCR recognition batching: 12 on GPU and 6 on CPU by default.
 - `LABEL_CONTROLLERS_OCR_REC_BATCH_NUM` and `--ocr-rec-batch-num` overrides, with the
   effective value exposed in model metadata.
@@ -15,6 +21,7 @@ a tagged public release exists.
 
 - GPU OCR defaults to the faster batch size 12. Set the batch setting to `6` when exact
   output parity with the original OCR path is required.
+- Version bumped to `0.5.0` for the MCP desktop-analysis service.
 
 ## [0.4.0] - 2026-10-30
 

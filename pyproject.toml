@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "label-controllers"
-version = "0.4.0"
+version = "0.5.0"
 description = "Upload a UI screenshot and receive fused clickable controls, OCR text, and an annotated image."
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
@@ -44,6 +44,7 @@ dev = [
 label-controllers = "label_controllers.cli:main"
 label-controllers-tool = "label_controllers.tool:main"
 label-controllers-desktop = "label_controllers.desktop.api:main"
+label-controllers-mcp = "label_controllers.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/Amywlp/label-controllers"
