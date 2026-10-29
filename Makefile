@@ -1,4 +1,4 @@
-.PHONY: install model api up down logs check format
+.PHONY: install model api up up-gpu down logs check format setup-directml
 
 install:
 python -m pip install -r requirements.txt
@@ -13,6 +13,9 @@ uvicorn label_controllers.api:app --host 0.0.0.0 --port 8000
 up:
 docker compose up -d --build
 
+up-gpu:
+docker compose -f compose.yaml -f compose.gpu.yaml up -d --build
+
 down:
 docker compose down
 
@@ -20,8 +23,8 @@ logs:
 docker compose logs -f api
 
 check:
-ruff check src
-python -m compileall -q src
+ruff check src scripts
+python -m compileall -q src scripts
 
 format:
 ruff check --fix src

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "label-controllers"
-version = "0.1.0"
+version = "0.2.0"
 description = "Upload a UI screenshot and receive fused clickable controls, OCR text, and an annotated image."
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
@@ -28,11 +28,7 @@ dependencies = [
   "numpy==2.2.6",
   "Pillow==12.3.0",
   "opencv-python==5.0.0.93",
-  "onnxruntime==1.20.1",
-  "rapidocr-onnxruntime==1.2.3",
   "ultralytics==8.3.203",
-  "torch==2.4.1",
-  "torchvision==0.19.1",
   "requests==2.34.2",
   "psutil==7.2.2",
 ]

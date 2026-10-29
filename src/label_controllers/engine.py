@@ -12,6 +12,7 @@ from typing import Any
 
 from PIL import Image, UnidentifiedImageError
 
+from .accelerator import resolve_ocr_provider, resolve_runtime_devices
 from .annotation import render_annotation
 from .config import Settings
 from .detectors import IconDetector, TextDetector
@@ -49,7 +50,7 @@ class AnalysisResult:
     raw_icons: dict[str, Any]
     raw_ocr: dict[str, Any]
     metadata: dict[str, Any]
-    annotated_png: bytes = field(repr=False)
+    annotated_png: bytes | None = field(default=None, repr=False)
 
     def to_payload(self, includes: set[str]) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -76,6 +77,8 @@ class AnalysisResult:
             metadata["output_fields"] = sorted(includes)
             payload["metadata"] = metadata
         if "annotated_image" in includes:
+            if self.annotated_png is None:
+                raise RuntimeError("The annotated image was not rendered for this analysis request.")
             import base64
 
             payload["annotated_image"] = {
@@ -99,28 +102,57 @@ class AnalysisEngine:
 
         load_started = time.perf_counter()
         self.settings = settings
-        self.icon_detector = IconDetector(settings.model_path, device="cpu")
-        self.text_detector = TextDetector()
+
+        # OCR must claim the DirectML adapter before torch-directml loads or
+        # executes YOLO. Keeping this construction order avoids an ORT DML
+        # session failure on the current Windows AMD implementation.
+        ocr_provider, _ = resolve_ocr_provider(settings.device, settings.ocr_device)
+        self.text_detector = TextDetector(provider=ocr_provider)
+        self.ocr_warmup_seconds = round(self.text_detector.warmup(), 4)
+
+        self.runtime = resolve_runtime_devices(
+            requested_device=settings.device,
+            requested_ocr_device=settings.ocr_device,
+            device_index=settings.device_index,
+            ocr_provider=ocr_provider,
+        )
+        self.icon_detector = IconDetector(
+            settings.model_path,
+            device=self.runtime.torch_device,
+            backend=self.runtime.backend,
+        )
+        # Warm-up turns lazy CUDA/DirectML kernel compilation into one-time
+        # startup cost and fails fast if a provider or operator is unavailable.
+        self.icon_warmup_seconds = round(self.icon_detector.warmup(min(settings.imgsz, 640)), 4)
         self.model_load_seconds = round(time.perf_counter() - load_started, 4)
         self.started_at = time.time()
         self.request_count = 0
         self._lock = threading.Lock()
 
     @property
+    def device_header(self) -> str:
+        return self.runtime.backend
+
+    @property
     def model_info(self) -> dict[str, Any]:
+        runtime = self.runtime.as_dict()
         return {
             "icon": {
                 "name": "OmniParser-v2 icon_detect",
                 "family": "YOLO11m",
                 "parameters": 20_053_779,
                 "file": self.settings.model_path.name,
-                "device": "cpu",
+                "device": self.runtime.backend,
+                "device_name": self.runtime.device_name,
+                "torch_version": self.runtime.torch_version,
             },
             "ocr": {
                 "name": "RapidOCR (PP-OCR ONNX)",
                 "engine": "rapidocr-onnxruntime==1.2.3",
-                "device": "cpu",
+                "device": self.runtime.ocr_backend,
+                "provider": self.runtime.ocr_provider,
             },
+            "runtime": runtime,
         }
 
     def readiness(self) -> dict[str, Any]:
@@ -128,6 +160,10 @@ class AnalysisEngine:
             "status": "ready",
             "models_loaded": True,
             "model_load_seconds": self.model_load_seconds,
+            "warmup_seconds": {
+                "icon": self.icon_warmup_seconds,
+                "ocr": self.ocr_warmup_seconds,
+            },
             "requests_processed": self.request_count,
             "uptime_seconds": round(time.time() - self.started_at, 1),
             "models": self.model_info,
@@ -141,6 +177,7 @@ class AnalysisEngine:
         filename: str = "upload",
         icon_confidence: float | None = None,
         ocr_confidence: float | None = None,
+        render_annotated: bool = False,
     ) -> AnalysisResult:
         if not image_bytes:
             raise ImageValidationError("The uploaded image is empty.")
@@ -180,12 +217,14 @@ class AnalysisEngine:
                 ]
 
                 annotation_started = time.perf_counter()
-                annotated_png = render_annotation(
-                    canonical_path,
-                    fused["elements"],
-                    control_count=len(controls),
-                    text_count=len(texts),
-                )
+                annotated_png = None
+                if render_annotated:
+                    annotated_png = render_annotation(
+                        canonical_path,
+                        fused["elements"],
+                        control_count=len(controls),
+                        text_count=len(texts),
+                    )
                 annotation_seconds = time.perf_counter() - annotation_started
                 total_seconds = time.perf_counter() - started
 
@@ -194,6 +233,7 @@ class AnalysisEngine:
                     "schema_version": "1.0",
                     "filename": Path(filename).name[:255],
                     "models": self.model_info,
+                    "runtime": self.runtime.as_dict(),
                     "model_load_seconds": self.model_load_seconds,
                     "timing_seconds": {
                         "decode_and_normalize": round(decode_seconds, 4),
@@ -221,6 +261,7 @@ class AnalysisEngine:
                     },
                     raw_ocr={
                         "engine": "rapidocr-onnxruntime",
+                        "provider": self.runtime.ocr_provider,
                         "elapsed_seconds": round(ocr_seconds, 4),
                         "detections": texts,
                     },

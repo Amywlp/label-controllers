@@ -1,0 +1,144 @@
+# GPU benchmark results
+
+## Validated environment
+
+| Component | Value |
+|---|---|
+| OS | Windows 10 22H2 (10.0.19045) |
+| CPU | AMD Ryzen 5 7500F, 6 cores / 12 threads |
+| RAM | 32 GB |
+| GPU | AMD Radeon RX 7800 XT |
+| GPU backend | DirectML through `torch-directml 0.2.5.dev240914` |
+| OCR backend | `onnxruntime-directml 1.20.1`, `DmlExecutionProvider` |
+| YOLO | OmniParser v2 `icon_detect.pt`, YOLO11m, 20,053,779 parameters |
+| OCR | RapidOCR 1.2.3 / PP-OCR ONNX |
+| Input size | `imgsz=1280` |
+| Thresholds | icon `0.18`, OCR `0.40` |
+
+The CPU and GPU runs used the same model file, preprocessing, thresholds and fusion code.
+Model weights remained resident across requests.
+
+## Workload
+
+The dataset contains 12 unique Arknights navigation screenshots at 2558 x 1377 pixels.
+The two JSON-response benchmarks executed three full passes per backend after a discarded
+warm-up request: 36 measured requests each. The annotated-PNG benchmark executed one full
+pass per backend: 12 measured requests each.
+
+Default JSON requests do not render an annotation. The engine renders the PNG only when
+`response_format=png` or `include=annotated_image`/`include=all` requests it.
+
+## Latency
+
+### JSON response
+
+| Stage | CPU mean | DirectML mean | GPU speed-up |
+|---|---:|---:|---:|
+| Decode and normalize | 0.2675 s | 0.2639 s | 1.01x |
+| YOLO icon detection | 0.4190 s | 0.0728 s | 5.76x |
+| RapidOCR | 1.0051 s | 0.5356 s | 1.88x |
+| Fusion | 0.0077 s | 0.0075 s | 1.03x |
+| End-to-end total | **1.7019 s** | **0.8814 s** | **1.93x** |
+| Median end-to-end | 1.6168 s | 0.8248 s | 1.96x |
+
+Mean end-to-end latency fell by 48.21%. The GPU gain is bounded by CPU-side image decoding,
+OCR preprocessing, fusion and response construction. YOLO itself was 5.76x faster and OCR
+was 1.88x faster. DirectML latency varies with GPU clock state and desktop graphics load;
+this table reports one complete 36-request run rather than a synthetic microbenchmark.
+
+### Annotated PNG response
+
+| Backend | Mean end-to-end |
+|---|---:|
+| CPU | 2.3690 s |
+| DirectML | 1.2069 s |
+
+The annotated path was 1.96x faster and reduced latency by 49.05%. Annotation rendering
+remains on the CPU and consumes the largest share of the remaining GPU-path latency.
+
+## Output consistency
+
+CPU output was used as the reference because both backends run the same model and pipeline.
+
+| Output | CPU count | DirectML count | Matched | Missing | Extra | F1 |
+|---|---:|---:|---:|---:|---:|---:|
+| Clickable controls | 449 | 449 | 449 | 0 | 0 | 1.000 |
+| Fused elements | 450 | 450 | 450 | 0 | 0 | 1.000 |
+| OCR text blocks | 429 | 429 | 429 | 0 | 0 | 1.000 |
+
+For one-to-one box matches at IoU >= 0.5:
+
+- Control text and semantic role accuracy: **100%**
+- OCR exact-text accuracy: **100%**
+- Mean control/element/text box IoU: **1.000**
+- Mean and maximum safe-click-point displacement: **0 px**
+
+The raw YOLO comparison was also checked before fusion on the same frames: all 276
+detections matched at IoU >= 0.5, with mean IoU `0.999999`, maximum rounded box difference
+of `0.001 px`, and maximum confidence difference below `0.000004`.
+
+These metrics measure parity with the CPU backend. They are not an absolute accuracy
+measurement against a separately human-labeled object-detection test set. The repository
+does not include that dataset or its test screenshots by design.
+
+Machine-readable results are stored in
+[`benchmarks/amd-rx7800xt-directml-v0.2.0.json`](benchmarks/amd-rx7800xt-directml-v0.2.0.json).
+
+## Reproduce
+
+Install the DirectML environment and start with matching model settings:
+
+```powershell
+.\scripts\setup-windows-directml.ps1
+$env:PYTHONPATH="$PWD\src"
+```
+
+Run CPU and DirectML benchmarks into the ignored `artifacts` directory:
+
+```powershell
+python scripts\benchmark.py --images "C:\frames\*.png" `
+  --device cpu --ocr-device cpu --repeat 3 `
+  --output artifacts\gpu-benchmark\cpu.json
+
+python scripts\benchmark.py --images "C:\frames\*.png" `
+  --device directml --ocr-device directml --repeat 3 `
+  --output artifacts\gpu-benchmark\directml.json
+
+python scripts\compare_benchmarks.py `
+  artifacts\gpu-benchmark\cpu.json `
+  artifacts\gpu-benchmark\directml.json `
+  --output artifacts\gpu-benchmark\comparison.json
+```
+
+Add `--annotated` to both benchmark commands to measure the PNG-rendering path. Use a
+consistent input set, model file and threshold for both backends.
+
+## CUDA image packaging validation
+
+The `Dockerfile.cuda` image was built locally from
+`pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime`, PyTorch `2.4.1+cu124`,
+`onnxruntime-gpu 1.20.2`, RapidOCR and the verified YOLO model.
+
+A read-only, capability-dropped, non-root container was then started with
+`LABEL_CONTROLLERS_DEVICE=cpu` because the validation host has no NVIDIA GPU. The
+CUDA image's CPU fallback passed:
+
+- health and readiness checks;
+- `CPUExecutionProvider` OCR initialization;
+- authenticated analysis returning 43 controls and 39 OCR blocks;
+- unauthenticated rejection with HTTP `401`.
+
+This validates image construction and application packaging, not CUDA kernel execution.
+CUDA throughput and provider activation must be measured on the target NVIDIA host with
+the same benchmark scripts.
+
+## Interpretation
+
+- DirectML provides a meaningful speed-up on the tested AMD GPU while preserving outputs.
+- In this run OCR accounted for about 61% of GPU-path request time and YOLO about 8%;
+  further optimization should
+  focus on OCR batching/provider behavior rather than icon detection alone.
+- Annotation rendering is CPU-bound. Rendering only on request already avoids paying that
+  cost for the common controls/elements/texts JSON response.
+- CUDA timing will differ based on GPU generation, driver and ONNX Runtime CUDA EP.
+  Re-run these scripts on the target NVIDIA host instead of extrapolating DirectML results.
