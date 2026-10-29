@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .accelerator import OCR_DEVICE_CHOICES, TORCH_DEVICE_CHOICES
+
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
     if value is None:
@@ -37,6 +39,13 @@ def _as_float(name: str, default: float, minimum: float = 0.0, maximum: float = 
     return value
 
 
+def _as_choice(name: str, default: str, choices: set[str]) -> str:
+    value = os.getenv(name, default).strip().casefold() or default
+    if value not in choices:
+        raise ValueError(f"{name} must be one of: {', '.join(sorted(choices))}")
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     model_path: Path
@@ -49,6 +58,9 @@ class Settings:
     cors_origins: tuple[str, ...] = ()
     log_level: str = "info"
     expose_docs: bool = True
+    device: str = "auto"
+    device_index: int = 0
+    ocr_device: str = "auto"
 
     @property
     def max_upload_bytes(self) -> int:
@@ -75,4 +87,7 @@ class Settings:
             cors_origins=cors,
             log_level=log_level,
             expose_docs=_as_bool(os.getenv("LABEL_CONTROLLERS_EXPOSE_DOCS"), True),
+            device=_as_choice("LABEL_CONTROLLERS_DEVICE", "auto", TORCH_DEVICE_CHOICES),
+            device_index=_as_int("LABEL_CONTROLLERS_DEVICE_INDEX", 0, minimum=0),
+            ocr_device=_as_choice("LABEL_CONTROLLERS_OCR_DEVICE", "auto", OCR_DEVICE_CHOICES),
         )

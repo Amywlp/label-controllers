@@ -1,0 +1,11 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.cuda
+    image: label-controllers:cuda
+    environment:
+      LABEL_CONTROLLERS_DEVICE: cuda
+      LABEL_CONTROLLERS_DEVICE_INDEX: "${LABEL_CONTROLLERS_DEVICE_INDEX:-0}"
+      LABEL_CONTROLLERS_OCR_DEVICE: cuda
+    gpus: all

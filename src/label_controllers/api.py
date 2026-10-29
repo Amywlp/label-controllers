@@ -39,9 +39,15 @@ async def lifespan(app: FastAPI):
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     app.state.settings = settings
-    logger.info("Loading OmniParser YOLO and RapidOCR models")
+    logger.info("Loading OmniParser YOLO and RapidOCR models on device=%s", settings.device)
     app.state.engine = AnalysisEngine(settings)
-    logger.info("Models ready in %.2fs", app.state.engine.model_load_seconds)
+    logger.info(
+        "Models ready in %.2fs on %s (%s), OCR provider=%s",
+        app.state.engine.model_load_seconds,
+        app.state.engine.runtime.backend,
+        app.state.engine.runtime.device_name,
+        app.state.engine.runtime.ocr_provider,
+    )
     yield
     logger.info("Shutting down Label Controllers API")
 
@@ -69,7 +75,14 @@ if settings.cors_origins:
         allow_credentials=False,
         allow_methods=["GET", "POST"],
         allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID"],
-        expose_headers=["X-Request-ID", "X-Control-Count", "X-Text-Count", "X-Processing-Seconds"],
+        expose_headers=[
+            "X-Request-ID",
+            "X-Control-Count",
+            "X-Text-Count",
+            "X-Model-Device",
+            "X-OCR-Provider",
+            "X-Processing-Seconds",
+        ],
     )
 
 
@@ -200,10 +213,11 @@ async def readyz(request: Request) -> dict[str, Any]:
 
 
 @app.get("/api/v1/capabilities", tags=["Metadata"])
-async def capabilities() -> dict[str, Any]:
+async def capabilities(request: Request) -> dict[str, Any]:
     return {
         "service": "label-controllers",
         "version": __version__,
+        "compute": request.app.state.engine.runtime.as_dict(),
         "upload": {
             "field": "file",
             "content_type": "multipart/form-data",
@@ -327,6 +341,7 @@ async def analyze(
             filename=file.filename or "upload",
             icon_confidence=icon_confidence,
             ocr_confidence=ocr_confidence,
+            render_annotated=response_format == "png" or "annotated_image" in requested_includes,
         )
     except ImageTooLargeError as exc:
         return _error(request, 413, "upload_too_large", str(exc))
@@ -340,10 +355,13 @@ async def analyze(
         "Cache-Control": "no-store",
         "X-Control-Count": str(len(result.controls)),
         "X-Text-Count": str(len(result.texts)),
-        "X-Model-Device": "cpu",
+        "X-Model-Device": engine.device_header,
+        "X-OCR-Provider": engine.runtime.ocr_provider,
     }
     if response_format == "png":
         result_headers["Content-Disposition"] = f'inline; filename="label-controllers-{result.request_id}.png"'
+        if result.annotated_png is None:
+            raise RuntimeError("Annotated PNG was requested but not rendered.")
         return Response(content=result.annotated_png, media_type="image/png", headers=result_headers)
 
     payload = result.to_payload(requested_includes)

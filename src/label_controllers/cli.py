@@ -38,8 +38,11 @@ def analyze_command(args: argparse.Namespace) -> int:
         filename=image_path.name,
         icon_confidence=args.icon_confidence,
         ocr_confidence=args.ocr_confidence,
+        render_annotated=True,
     )
     annotation_path = output_dir / "annotated.png"
+    if result.annotated_png is None:
+        raise RuntimeError("Annotated PNG was requested but not rendered.")
     annotation_path.write_bytes(result.annotated_png)
     json_path = output_dir / "result.json"
     json_path.write_text(

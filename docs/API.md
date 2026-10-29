@@ -104,12 +104,33 @@ Response shape:
         "family": "YOLO11m",
         "parameters": 20053779,
         "file": "icon_detect.pt",
-        "device": "cpu"
+        "device": "cpu",
+        "device_name": "AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
+        "torch_version": "2.4.1+cpu"
       },
       "ocr": {
         "name": "RapidOCR (PP-OCR ONNX)",
         "engine": "rapidocr-onnxruntime==1.2.3",
-        "device": "cpu"
+        "device": "cpu",
+        "provider": "CPUExecutionProvider"
+      },
+      "runtime": {
+        "backend": "cpu",
+        "device_index": 0,
+        "is_gpu": false,
+        "ocr": {
+          "backend": "cpu",
+          "provider": "CPUExecutionProvider"
+        }
+      }
+    },
+    "runtime": {
+      "backend": "cpu",
+      "device_index": 0,
+      "is_gpu": false,
+      "ocr": {
+        "backend": "cpu",
+        "provider": "CPUExecutionProvider"
       }
     },
     "model_load_seconds": 4.12,
@@ -118,7 +139,7 @@ Response shape:
       "icon": 1.02,
       "ocr": 0.91,
       "fusion": 0.12,
-      "annotation": 0.07,
+      "annotation": 0.0,
       "total": 2.16
     },
     "fused_counts": {
@@ -139,6 +160,13 @@ Response shape:
 ```
 
 Actual coordinates and counts depend on the screenshot and model thresholds.
+`annotation` is `0.0` unless the caller requests `response_format=png` or
+`include=annotated_image`/`include=all`. This avoids unnecessary CPU rendering for
+controls-only and JSON-only consumers.
+
+GPU deployments add richer values to `metadata.models.icon`, `metadata.models.ocr`,
+`metadata.models.runtime`, and the top-level `metadata.runtime`. Examples are
+`directml` / `DmlExecutionProvider` and `cuda` / `CUDAExecutionProvider`.
 
 ### Base64 image example
 
@@ -176,7 +204,8 @@ The response has `Content-Type: image/png` and includes:
 - `X-Request-ID`
 - `X-Control-Count`
 - `X-Text-Count`
-- `X-Model-Device: cpu`
+- `X-Model-Device: cpu`, `cuda`, `rocm`, `directml`, or `mps`
+- `X-OCR-Provider: CPUExecutionProvider`, `CUDAExecutionProvider`, `DmlExecutionProvider`, or another provider
 - `X-Processing-Seconds`
 
 ### Error format
@@ -202,7 +231,9 @@ The response has `Content-Type: image/png` and includes:
 
 ## `GET /api/v1/capabilities`
 
-Returns supported fields, formats, upload limits, and authentication notes. It does not run inference.
+Returns supported fields, formats, upload limits, authentication notes, and the active
+`compute` runtime object (`backend`, `device_name`, `is_gpu`, torch version, device index and
+OCR provider). It does not run inference.
 
 ## `GET /healthz`
 
@@ -211,7 +242,8 @@ Process liveness check. It does not verify model readiness.
 ## `GET /readyz`
 
 Returns `200` once the YOLO and OCR models are loaded. Response includes model load time,
-processed request count and uptime.
+warm-up timings, processed request count, uptime, model details and the resolved accelerator
+under `models.runtime`.
 
 ## Coordinate system
 

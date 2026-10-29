@@ -15,6 +15,7 @@ Describe how you verified the change. Do not attach private screenshots or secre
 ## Checklist
 
 - [ ] No secrets, model weights, local test content or generated artifacts are included
-- [ ] `ruff check src` passes
-- [ ] `python -m compileall -q src` passes
+- [ ] `ruff check src scripts` passes
+- [ ] `python -m compileall -q src scripts` passes
+- [ ] CPU/GPU and DirectML/CUDA behavior verified or explicitly noted
 - [ ] Documentation updated when needed

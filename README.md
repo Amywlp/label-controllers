@@ -8,7 +8,7 @@ Label Controllers 是一个面向 Computer Use、UI 自动化和 GUI 测试的�
 上传一张界面截图，服务会同时运行 OmniParser v2 YOLO11m 图标检测与 RapidOCR 文字识别，
 再把图标和文字融合成可点击控件、OCR 文本块和带标注的图像。
 
-仓库建议名称：`label-controllers`（GitHub 仓库名不能包含空格；显示名称可写为 **Label Controllers**）。
+GitHub 仓库：[Amywlp/label-controllers](https://github.com/Amywlp/label-controllers)（显示名称 **Label Controllers**）。
 
 ## 功能
 
@@ -20,6 +20,8 @@ Label Controllers 是一个面向 Computer Use、UI 自动化和 GUI 测试的�
 - 原始 YOLO 与 OCR 结果：适合调试和二次融合。
 - 模型常驻内存，同一容器内无需为每次请求重新加载。
 - Docker 镜像在构建阶段自动下载并校验 `icon_detect.pt`。
+- CPU、NVIDIA CUDA、Windows DirectML 三种运行路径，共用同一 API 和输出格式。
+- 运行设备、显卡名称、OCR Execution Provider 和分阶段耗时均写入响应元数据。
 - 可选 API Key 鉴权、上传大小限制、像素限制、CORS、OpenAPI 文档。
 
 ## 快速部署
@@ -47,6 +49,22 @@ curl http://127.0.0.1:8000/readyz
 - Swagger UI：<http://127.0.0.1:8000/docs>
 - OpenAPI JSON：<http://127.0.0.1:8000/openapi.json>
 - 能力清单：<http://127.0.0.1:8000/api/v1/capabilities>
+
+以上命令使用 CPU 推理镜像。GPU 部署方式如下。
+
+## GPU 加速
+
+| 运行环境 | 推荐后端 | 启动方式 |
+|---|---|---|
+| NVIDIA GPU + Linux Docker | CUDA 12.4 + ONNX Runtime CUDA | `docker compose -f compose.yaml -f compose.gpu.yaml up -d --build` |
+| Windows 原生环境（AMD/NVIDIA/Intel） | DirectML | `.\scripts\setup-windows-directml.ps1`，然后 `.\scripts\run-windows-directml.ps1` |
+| CPU-only | PyTorch CPU + ONNX Runtime CPU | `docker compose up -d --build` |
+
+NVIDIA Docker 需要 NVIDIA Container Toolkit。DirectML 方式已在 AMD Radeon RX 7800 XT
+上完成速度和输出一致性测试；当前 WSL2/AMD 环境不提供 ROCm 所需的 `/dev/kfd`，因此该显卡
+不能直接用于 Linux Docker GPU 推理。CUDA 镜像已完成本地构建和只读容器接口冒烟测试，但仍需在目标 NVIDIA 主机验证 CUDA EP 实例与性能。
+
+完整配置、限制和故障排查见 [docs/GPU.md](docs/GPU.md)。
 
 ## 调用示例
 
@@ -136,6 +154,9 @@ OpenCV 距离变换得到的建议点击点；`center` 是控件矩形中心。
 | `LABEL_CONTROLLERS_IMGSZ` | `1280` | YOLO 推理尺寸 |
 | `LABEL_CONTROLLERS_ICON_CONFIDENCE` | `0.18` | 默认 YOLO 阈值 |
 | `LABEL_CONTROLLERS_OCR_CONFIDENCE` | `0.40` | 默认 OCR 阈值 |
+| `LABEL_CONTROLLERS_DEVICE` | `auto` | `auto/cpu/cuda/rocm/directml/mps` |
+| `LABEL_CONTROLLERS_DEVICE_INDEX` | `0` | GPU 序号 |
+| `LABEL_CONTROLLERS_OCR_DEVICE` | `auto` | `auto/cpu/cuda/rocm/directml` |
 | `LABEL_CONTROLLERS_CORS_ORIGINS` | 空 | 逗号分隔的允许来源 |
 | `LABEL_CONTROLLERS_LOG_LEVEL` | `info` | 日志等级 |
 | `LABEL_CONTROLLERS_EXPOSE_DOCS` | `true` | 是否开放 `/docs` |
@@ -161,6 +182,7 @@ multipart screenshot
 ```text
 src/label_controllers/
 ├── api.py          # FastAPI 路由、鉴权、错误格式
+├── accelerator.py  # CPU / CUDA / DirectML 设备解析
 ├── engine.py       # 常驻模型、图片校验、分析编排
 ├── detectors.py    # YOLO / RapidOCR 封装
 ├── fusion.py       # 控件与文字融合
@@ -182,17 +204,43 @@ python scripts/download_model.py
 uvicorn label_controllers.api:app --host 0.0.0.0 --port 8000
 ```
 
+Windows DirectML 环境使用独立虚拟环境：
+
+```powershell
+.\scripts\setup-windows-directml.ps1
+.\scripts\run-windows-directml.ps1
+```
+
 命令行方式：
 
 ```bash
 label-controllers analyze --input screenshot.png --output-dir artifacts/cli --include controls,texts,metadata
 ```
 
+## 性能基线
+
+在 12 张 2558×1377 Arknights 截图上，每张执行 3 轮（CPU 与 DirectML 各 36 次请求）：
+
+| 指标 | CPU | RX 7800 XT DirectML | 变化 |
+|---|---:|---:|---:|
+| 端到端平均耗时 | 1.702 s | 0.881 s | 1.93× 加速，降低 48.2% |
+| YOLO 平均耗时 | 0.419 s | 0.073 s | 5.76× 加速 |
+| OCR 平均耗时 | 1.005 s | 0.536 s | 1.88× 加速 |
+| 可点击控件输出 | 449 | 449 | 449/449 匹配 |
+| OCR 文本块 | 429 | 429 | 429/429 匹配 |
+| 缺失 / 多余控件 | — | — | 0 / 0 |
+
+测试采用同一模型、阈值和融合代码，以 CPU 为参考对比 GPU 输出一致性：控件与 OCR
+框的 IoU、文本、角色和安全点击点均达到 100% 对齐。该结果衡量后端一致性，不等同于
+外部人工标注数据集的绝对精度。完整方法和复现命令见 [docs/BENCHMARKS.md](docs/BENCHMARKS.md)。
+
 ## 资源说明
 
-这是 CPU 推理镜像。首次构建会下载 PyTorch CPU wheel、OCR 依赖和约 40 MB 的图标模型，
-构建时间和镜像体积都会明显高于普通 Web 服务。容器启动后模型常驻，单次推理不再加载模型。
-高并发场景建议在反向代理层排队，或启动多个副本并对每个副本配置足够内存。
+CPU 镜像首次构建会下载 PyTorch CPU wheel、OCR 依赖和约 40 MB 的图标模型。
+CUDA 镜像的 PyTorch 基础层压缩下载约 3.2 GB、解压后约 9.4 GB，建议预留 20 GB 磁盘；
+DirectML 使用原生 Windows Python。
+容器启动后模型常驻，单次推理不再加载模型。高并发场景建议在反向代理层排队，或启动
+多个副本并对每个副本配置足够内存。
 
 ## 安全与数据
 
