@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "label-controllers"
+version = "0.1.0"
+description = "Upload a UI screenshot and receive fused clickable controls, OCR text, and an annotated image."
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Label Controllers contributors" }]
+keywords = ["computer-use", "gui", "yolo", "ocr", "fastapi", "omniparser"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Image Recognition",
+]
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.34,<1",
+  "python-multipart>=0.0.20,<1",
+  "numpy==2.2.6",
+  "Pillow==12.3.0",
+  "opencv-python==5.0.0.93",
+  "onnxruntime==1.20.1",
+  "rapidocr-onnxruntime==1.2.3",
+  "ultralytics==8.3.203",
+  "torch==2.4.1",
+  "torchvision==0.19.1",
+  "requests==2.34.2",
+  "psutil==7.2.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9",
+  "httpx>=0.28,<1",
+  "ruff>=0.11,<1",
+]
+
+[project.scripts]
+label-controllers = "label_controllers.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/OWNER/label-controllers"
+Documentation = "https://github.com/OWNER/label-controllers/blob/main/docs/API.md"
+Issues = "https://github.com/OWNER/label-controllers/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

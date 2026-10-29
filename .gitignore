@@ -1,0 +1,72 @@
+# Secrets and local credentials
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+secrets/
+credentials*.json
+service-account*.json
+.npmrc
+.pypirc
+
+# Local test content and test outputs
+tests/
+test/
+__tests__/
+*.test.*
+*.spec.*
+test-results/
+coverage/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+fixtures/
+screenshots/
+
+# Generated artifacts and uploaded user data
+.ruff_cache/
+.mypy_cache/
+artifacts/
+runtime/
+uploads/
+data/
+logs/
+*.log
+*.pid
+
+# Model weights (downloaded automatically for Docker builds)
+models/*
+!models/.gitkeep
+*.pt
+*.pth
+*.onnx
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE and OS files
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

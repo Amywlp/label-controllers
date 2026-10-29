@@ -1,0 +1,43 @@
+name: label-controllers
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: label-controllers:local
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${LABEL_CONTROLLERS_API_PORT:-8000}:8000"
+    environment:
+      LABEL_CONTROLLERS_API_KEY: "${LABEL_CONTROLLERS_API_KEY:-}"
+      LABEL_CONTROLLERS_LOG_LEVEL: "${LABEL_CONTROLLERS_LOG_LEVEL:-info}"
+      LABEL_CONTROLLERS_MAX_UPLOAD_MB: "${LABEL_CONTROLLERS_MAX_UPLOAD_MB:-20}"
+      LABEL_CONTROLLERS_MAX_IMAGE_PIXELS: "${LABEL_CONTROLLERS_MAX_IMAGE_PIXELS:-40000000}"
+      LABEL_CONTROLLERS_IMGSZ: "${LABEL_CONTROLLERS_IMGSZ:-1280}"
+      LABEL_CONTROLLERS_ICON_CONFIDENCE: "${LABEL_CONTROLLERS_ICON_CONFIDENCE:-0.18}"
+      LABEL_CONTROLLERS_OCR_CONFIDENCE: "${LABEL_CONTROLLERS_OCR_CONFIDENCE:-0.40}"
+      LABEL_CONTROLLERS_CORS_ORIGINS: "${LABEL_CONTROLLERS_CORS_ORIGINS:-}"
+      LABEL_CONTROLLERS_EXPOSE_DOCS: "${LABEL_CONTROLLERS_EXPOSE_DOCS:-true}"
+      LABEL_CONTROLLERS_MODEL_PATH: /app/models/icon_detect.pt
+      YOLO_CONFIG_DIR: /tmp
+      MPLCONFIGDIR: /tmp/matplotlib
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 20s
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 240s
