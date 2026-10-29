@@ -118,7 +118,8 @@ Response shape:
         "name": "RapidOCR (PP-OCR ONNX)",
         "engine": "rapidocr-onnxruntime==1.2.3",
         "device": "cpu",
-        "provider": "CPUExecutionProvider"
+        "provider": "CPUExecutionProvider",
+        "rec_batch_num": 6
       },
       "runtime": {
         "backend": "cpu",
@@ -173,6 +174,8 @@ controls-only and JSON-only consumers.
 GPU deployments add richer values to `metadata.models.icon`, `metadata.models.ocr`,
 `metadata.models.runtime`, and the top-level `metadata.runtime`. Examples are
 `directml` / `DmlExecutionProvider` and `cuda` / `CUDAExecutionProvider`.
+`metadata.models.ocr.rec_batch_num` reports the effective recognition batch: 12 on GPU and
+6 on CPU unless `LABEL_CONTROLLERS_OCR_REC_BATCH_NUM` overrides it.
 
 ### Base64 image example
 

@@ -125,6 +125,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         device=args.device,
         ocr_device=args.ocr_device,
         device_index=args.device_index,
+        ocr_rec_batch_num=args.ocr_rec_batch_num,
     )
     engine = AnalysisEngine(settings)
     output = Path(args.output).expanduser().resolve()
@@ -184,6 +185,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "device": settings.device,
             "ocr_device": settings.ocr_device,
             "device_index": settings.device_index,
+            "ocr_rec_batch_num": settings.ocr_rec_batch_num,
             "imgsz": settings.imgsz,
             "images": [str(path) for path in images],
             "warmup_requests": args.warmup,
@@ -211,6 +213,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", choices=["auto", "cpu", "cuda", "rocm", "directml", "mps"], default="auto")
     parser.add_argument("--ocr-device", choices=["auto", "cpu", "cuda", "rocm", "directml"], default="auto")
     parser.add_argument("--device-index", type=int, default=0)
+    parser.add_argument(
+        "--ocr-rec-batch-num",
+        type=int,
+        default=0,
+        help="OCR recognizer batch size; 0 auto-selects 12 on GPU and 6 on CPU.",
+    )
     parser.add_argument("--model", help="Override the YOLO model path")
     parser.add_argument("--imgsz", type=int, default=1280)
     parser.add_argument("--warmup", type=int, default=1)
@@ -227,6 +235,8 @@ def main() -> int:
     args = build_parser().parse_args()
     if args.repeat < 1 or args.warmup < 0:
         raise SystemExit("--repeat must be >= 1 and --warmup must be >= 0")
+    if args.ocr_rec_batch_num < 0:
+        raise SystemExit("--ocr-rec-batch-num must be >= 0")
     run(args)
     return 0
 

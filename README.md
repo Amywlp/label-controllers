@@ -228,6 +228,7 @@ OpenCV 距离变换得到的建议点击点；`center` 是控件矩形中心。
 | `LABEL_CONTROLLERS_DEVICE` | `auto` | `auto/cpu/cuda/rocm/directml/mps` |
 | `LABEL_CONTROLLERS_DEVICE_INDEX` | `0` | GPU 序号 |
 | `LABEL_CONTROLLERS_OCR_DEVICE` | `auto` | `auto/cpu/cuda/rocm/directml` |
+| `LABEL_CONTROLLERS_OCR_REC_BATCH_NUM` | `0` | OCR 识别批大小；`0` 自动选择 GPU 12、CPU 6 |
 | `LABEL_CONTROLLERS_CORS_ORIGINS` | 空 | 逗号分隔的允许来源 |
 | `LABEL_CONTROLLERS_LOG_LEVEL` | `info` | 日志等级 |
 | `LABEL_CONTROLLERS_EXPOSE_DOCS` | `true` | 是否开放 `/docs` |
@@ -294,9 +295,9 @@ Windows DirectML 环境使用独立虚拟环境：
 label-controllers analyze --input screenshot.png --output-dir artifacts/cli --include controls,texts,metadata
 ```
 
-## 性能基线
+## 性能基线（v0.2.0，OCR batch 6）
 
-在 12 张 2558×1377 Arknights 截图上，每张执行 3 轮（CPU 与 DirectML 各 36 次请求）：
+以下历史基线使用 OCR 识别批大小 6。在 12 张 2558×1377 Arknights 截图上，每张执行 3 轮（CPU 与 DirectML 各 36 次请求）：
 
 | 指标 | CPU | RX 7800 XT DirectML | 变化 |
 |---|---:|---:|---:|
@@ -307,9 +308,15 @@ label-controllers analyze --input screenshot.png --output-dir artifacts/cli --in
 | OCR 文本块 | 429 | 429 | 429/429 匹配 |
 | 缺失 / 多余控件 | — | — | 0 / 0 |
 
-测试采用同一模型、阈值和融合代码，以 CPU 为参考对比 GPU 输出一致性：控件与 OCR
-框的 IoU、文本、角色和安全点击点均达到 100% 对齐。该结果衡量后端一致性，不等同于
-外部人工标注数据集的绝对精度。完整方法和复现命令见 [docs/BENCHMARKS.md](docs/BENCHMARKS.md)。
+GPU 默认使用 OCR 识别批大小 12，CPU 保持 6。批大小 12 在 12 张测试图上把 DirectML
+OCR 阶段从 0.550 s 降至 0.478 s，端到端从 0.901 s 降至 0.834 s；但由于 RapidOCR 1.2.3
+按批内最大宽高比填充，部分文本结果会与批大小 6 不同。需要完全一致的输出时设置
+`LABEL_CONTROLLERS_OCR_REC_BATCH_NUM=6`。详细结果见 [docs/BENCHMARKS.md](docs/BENCHMARKS.md)。
+
+上表使用 batch 6，因此控件与 OCR 框保持 100% 对齐。GPU 默认改为 batch 12 后属于
+速度/输出一致性的可选折中，不再是逐字节一致；对比数据和退回 batch 6 的方法见
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md)。这些结果衡量后端一致性，不等同于外部人工
+标注数据集的绝对精度。
 
 ## 资源说明
 

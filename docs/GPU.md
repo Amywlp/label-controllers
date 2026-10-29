@@ -50,7 +50,7 @@ GPU readiness must report:
 {
   "models": {
     "icon": {"device": "cuda"},
-    "ocr": {"device": "cuda", "provider": "CUDAExecutionProvider"}
+    "ocr": {"device": "cuda", "provider": "CUDAExecutionProvider", "rec_batch_num": 12}
   }
 }
 ```
@@ -96,7 +96,8 @@ Expected highlights:
     },
     "ocr": {
       "device": "directml",
-      "provider": "DmlExecutionProvider"
+      "provider": "DmlExecutionProvider",
+      "rec_batch_num": 12
     }
   }
 }
@@ -126,9 +127,15 @@ Expected highlights:
 | `LABEL_CONTROLLERS_DEVICE` | `auto`, `cpu`, `cuda`, `rocm`, `directml`, `mps` | `auto` | YOLO/torch device |
 | `LABEL_CONTROLLERS_DEVICE_INDEX` | integer | `0` | GPU index |
 | `LABEL_CONTROLLERS_OCR_DEVICE` | `auto`, `cpu`, `cuda`, `rocm`, `directml` | `auto` | ONNX Runtime execution provider |
+| `LABEL_CONTROLLERS_OCR_REC_BATCH_NUM` | integer; `0` means auto | `0` | OCR recognition batch; auto uses 12 on GPU and 6 on CPU |
 
 `auto` prefers CUDA/ROCm, then Apple MPS, then DirectML, then CPU for torch. OCR chooses
 the matching GPU provider when the installed ONNX Runtime exposes it, otherwise CPU.
+
+The OCR recognition batch is intentionally provider-aware: 12 on GPU and 6 on CPU. In RapidOCR
+1.2.3, batch composition also determines the maximum aspect-ratio padding, so batch 12 is faster
+but can change a small number of recognized strings relative to batch 6. Set the environment
+variable to `6` when byte-for-byte output parity with the original CPU path is required.
 
 Runtime information is available from:
 

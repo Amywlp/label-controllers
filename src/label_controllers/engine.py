@@ -15,7 +15,7 @@ from PIL import Image, UnidentifiedImageError
 from .accelerator import resolve_ocr_provider, resolve_runtime_devices
 from .annotation import render_annotation
 from .config import Settings
-from .detectors import IconDetector, TextDetector
+from .detectors import IconDetector, TextDetector, default_ocr_rec_batch_num
 from .fusion import fuse_elements
 
 
@@ -97,7 +97,8 @@ class AnalysisEngine:
         # executes YOLO. Keeping this construction order avoids an ORT DML
         # session failure on the current Windows AMD implementation.
         ocr_provider, _ = resolve_ocr_provider(settings.device, settings.ocr_device)
-        self.text_detector = TextDetector(provider=ocr_provider)
+        rec_batch_num = settings.ocr_rec_batch_num or default_ocr_rec_batch_num(ocr_provider)
+        self.text_detector = TextDetector(provider=ocr_provider, rec_batch_num=rec_batch_num)
         self.ocr_warmup_seconds = round(self.text_detector.warmup(), 4)
 
         self.runtime = resolve_runtime_devices(
@@ -141,6 +142,7 @@ class AnalysisEngine:
                 "engine": "rapidocr-onnxruntime==1.2.3",
                 "device": self.runtime.ocr_backend,
                 "provider": self.runtime.ocr_provider,
+                "rec_batch_num": self.text_detector.rec_batch_num,
             },
             "runtime": runtime,
         }

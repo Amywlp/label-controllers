@@ -61,6 +61,7 @@ class Settings:
     device: str = "auto"
     device_index: int = 0
     ocr_device: str = "auto"
+    ocr_rec_batch_num: int = 0
 
     @property
     def max_upload_bytes(self) -> int:
@@ -90,4 +91,5 @@ class Settings:
             device=_as_choice("LABEL_CONTROLLERS_DEVICE", "auto", TORCH_DEVICE_CHOICES),
             device_index=_as_int("LABEL_CONTROLLERS_DEVICE_INDEX", 0, minimum=0),
             ocr_device=_as_choice("LABEL_CONTROLLERS_OCR_DEVICE", "auto", OCR_DEVICE_CHOICES),
+            ocr_rec_batch_num=_as_int("LABEL_CONTROLLERS_OCR_REC_BATCH_NUM", 0, minimum=0),
         )

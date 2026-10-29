@@ -132,12 +132,62 @@ This validates image construction and application packaging, not CUDA kernel exe
 CUDA throughput and provider activation must be measured on the target NVIDIA host with
 the same benchmark scripts.
 
+## OCR recognition batch tuning
+
+The provider-aware OCR default keeps RapidOCR's conservative batch size 6 on CPU and uses
+batch size 12 on GPU. The following comparison used the same 12 Arknights screenshots,
+DirectML, `PP-OCRv3 Mobile`, full-resolution text detection, angle classification enabled
+and three measured passes per configuration. Each result therefore represents 36 requests.
+
+| Stage | Batch 6 | Batch 12 | Change |
+|---|---:|---:|---:|
+| Decode and normalize | 0.2672 s | 0.2683 s | unchanged |
+| YOLO icon detection | 0.0749 s | 0.0775 s | unchanged |
+| RapidOCR | 0.5496 s | 0.4781 s | **13.0% lower** |
+| Fusion | 0.0080 s | 0.0081 s | unchanged |
+| End-to-end mean | **0.9013 s** | **0.8337 s** | **1.081x faster, 7.5% lower latency** |
+
+Unlike a model substitution, this changes output because RapidOCR 1.2.3 pads every input
+in a recognition batch to the widest item in that batch. Batch boundaries therefore affect
+the recognition tensor width. Relative to batch 6, batch 12 produced:
+
+| Output | Batch 6 | Batch 12 | Matched | Missing | Extra | F1 |
+|---|---:|---:|---:|---:|---:|---:|
+| Clickable controls | 449 | 447 | 442 | 7 | 5 | 0.9866 |
+| Fused elements | 450 | 448 | 443 | 7 | 5 | 0.9866 |
+| OCR text blocks | 429 | 427 | 425 | 4 | 2 | 0.9930 |
+
+For OCR boxes matched at IoU >= 0.5, exact-text accuracy was 96.71%, while box IoU was
+1.000. The difference is therefore caused by recognition/padding behavior rather than text
+detection. Set `LABEL_CONTROLLERS_OCR_REC_BATCH_NUM=6` to retain the original output path.
+This is a measured speed/accuracy trade-off, not a byte-for-byte parity result.
+
+Reproduce:
+
+```powershell
+python scripts\benchmark.py --images "C:\frames\*.png" `
+  --device directml --ocr-device directml --ocr-rec-batch-num 6 `
+  --repeat 3 --output artifacts\ocr-batch12\benchmark-b6.json
+
+python scripts\benchmark.py --images "C:\frames\*.png" `
+  --device directml --ocr-device directml --ocr-rec-batch-num 12 `
+  --repeat 3 --output artifacts\ocr-batch12\benchmark-b12.json
+
+python scripts\compare_benchmarks.py `
+  artifacts\ocr-batch12\benchmark-b6.json `
+  artifacts\ocr-batch12\benchmark-b12.json `
+  --output artifacts\ocr-batch12\comparison.json
+```
+
+Machine-readable summary:
+[`benchmarks/amd-rx7800xt-directml-ocr-batch-v0.4.0.json`](benchmarks/amd-rx7800xt-directml-ocr-batch-v0.4.0.json).
+
 ## Interpretation
 
-- DirectML provides a meaningful speed-up on the tested AMD GPU while preserving outputs.
-- In this run OCR accounted for about 61% of GPU-path request time and YOLO about 8%;
-  further optimization should
-  focus on OCR batching/provider behavior rather than icon detection alone.
+- DirectML provides a meaningful speed-up on the tested AMD GPU while preserving outputs
+  when OCR batch 6 is selected; the default GPU batch 12 is a measured speed/accuracy trade-off.
+- In the v0.2.0 run OCR accounted for about 61% of GPU-path request time and YOLO about 8%;
+  OCR batching/provider behavior remains the highest-leverage optimization area.
 - Annotation rendering is CPU-bound. Rendering only on request already avoids paying that
   cost for the common controls/elements/texts JSON response.
 - CUDA timing will differ based on GPU generation, driver and ONNX Runtime CUDA EP.

@@ -14,6 +14,20 @@ _ACTIVATED_OCR_PROVIDERS: set[str] = set()
 _RAPIDOCR_OVERRIDE_INSTALLED = False
 _DIRECTML_COMPATIBILITY_INSTALLED = False
 
+OCR_CPU_REC_BATCH_NUM = 6
+OCR_GPU_REC_BATCH_NUM = 12
+
+
+def default_ocr_rec_batch_num(provider: str) -> int:
+    """Use larger recognition batches only where they help.
+
+    DirectML tests showed a clear throughput gain at batch 12, while larger
+    batches slowed down CPU inference substantially. Keep the conservative
+    RapidOCR default for CPU and use the measured GPU default elsewhere.
+    """
+
+    return OCR_GPU_REC_BATCH_NUM if provider != "CPUExecutionProvider" else OCR_CPU_REC_BATCH_NUM
+
 
 def _install_directml_compatibility() -> None:
     """Apply the two compatibility shims required by torch-directml 0.2.5.
@@ -195,7 +209,7 @@ def _install_rapidocr_provider_override() -> None:
 
 
 class TextDetector:
-    def __init__(self, provider: str = "CPUExecutionProvider"):
+    def __init__(self, provider: str = "CPUExecutionProvider", rec_batch_num: int | None = None):
         global _OCR_PROVIDERS
         _OCR_PROVIDERS = [provider]
         _ACTIVATED_OCR_PROVIDERS.clear()
@@ -203,7 +217,12 @@ class TextDetector:
         from rapidocr_onnxruntime import RapidOCR
 
         self.provider = provider
-        self.engine = RapidOCR()
+        self.rec_batch_num = (
+            rec_batch_num if rec_batch_num is not None and rec_batch_num > 0 else default_ocr_rec_batch_num(provider)
+        )
+        # RapidOCR 1.2.3 requires model_path to accompany other Rec overrides.
+        # Passing None keeps its packaged PP-OCR model while changing batching.
+        self.engine = RapidOCR(rec_batch_num=self.rec_batch_num, rec_model_path=None)
         self.session_providers = sorted(_ACTIVATED_OCR_PROVIDERS)
         if provider not in self.session_providers:
             raise RuntimeError(

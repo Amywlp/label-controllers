@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-10-30T05:14:44+0800",
+  "environment": {
+    "platform": "Windows-10-10.0.19045-SP0",
+    "python": "3.10.11",
+    "cpu": "AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
+    "logical_cpus": 12,
+    "ram_gb": 31.56,
+    "gpu": "AMD Radeon RX 7800 XT",
+    "backend": "DirectML",
+    "ocr_provider": "DmlExecutionProvider"
+  },
+  "workload": {
+    "images": 12,
+    "resolution": "2558x1377",
+    "passes_per_configuration": 3,
+    "requests_per_configuration": 36
+  },
+  "ocr": {
+    "engine": "rapidocr-onnxruntime==1.2.3",
+    "models": "PP-OCRv3 Mobile",
+    "angle_classification": true,
+    "detector_limit_type": "min",
+    "detector_limit_side_len": 736
+  },
+  "timing_seconds": {
+    "batch_6": {
+      "decode_and_normalize": 0.2672,
+      "icon": 0.0749,
+      "ocr": 0.5496,
+      "fusion": 0.008,
+      "total": 0.9013
+    },
+    "batch_12": {
+      "decode_and_normalize": 0.2683,
+      "icon": 0.0775,
+      "ocr": 0.4781,
+      "fusion": 0.0081,
+      "total": 0.8337
+    }
+  },
+  "speed": {
+    "mean_speedup": 1.0811,
+    "latency_reduction_percent": 7.5
+  },
+  "accuracy_vs_batch_6": {
+    "controls": {
+      "reference_count": 449,
+      "candidate_count": 447,
+      "matched": 442,
+      "missing": 7,
+      "extra": 5,
+      "precision": 0.988814,
+      "recall": 0.98441,
+      "f1": 0.986607,
+      "text_exact_accuracy_on_matches": 0.959276,
+      "role_accuracy_on_matches": 0.997738,
+      "mean_iou": 0.999506,
+      "min_iou": 0.781509,
+      "mean_click_distance_px": 1.3987,
+      "max_click_distance_px": 239.6331
+    },
+    "elements": {
+      "reference_count": 450,
+      "candidate_count": 448,
+      "matched": 443,
+      "missing": 7,
+      "extra": 5,
+      "precision": 0.988839,
+      "recall": 0.984444,
+      "f1": 0.986637,
+      "text_exact_accuracy_on_matches": 0.959368,
+      "role_accuracy_on_matches": 0.997743,
+      "mean_iou": 0.999507,
+      "min_iou": 0.781509,
+      "mean_click_distance_px": 1.3955,
+      "max_click_distance_px": 239.6331
+    },
+    "texts": {
+      "reference_count": 429,
+      "candidate_count": 427,
+      "matched": 425,
+      "missing": 4,
+      "extra": 2,
+      "precision": 0.995316,
+      "recall": 0.990676,
+      "f1": 0.992991,
+      "text_exact_accuracy_on_matches": 0.967059,
+      "role_accuracy_on_matches": 1.0,
+      "mean_iou": 1.0,
+      "min_iou": 1.0,
+      "mean_click_distance_px": 0.0,
+      "max_click_distance_px": 0.0
+    },
+    "image_count": 12
+  },
+  "configuration": {
+    "auto": "GPU 12, CPU 6",
+    "default_gpu_batch": 12,
+    "default_cpu_batch": 6,
+    "parity_override": 6
+  },
+  "note": "Batch 12 changes RapidOCR recognition padding and therefore is not byte-for-byte identical to batch 6. See docs/BENCHMARKS.md."
+}

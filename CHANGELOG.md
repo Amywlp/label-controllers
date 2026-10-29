@@ -3,6 +3,19 @@
 All notable changes are documented here. The project follows semantic versioning once
 a tagged public release exists.
 
+## [Unreleased]
+
+### Added
+
+- Provider-aware OCR recognition batching: 12 on GPU and 6 on CPU by default.
+- `LABEL_CONTROLLERS_OCR_REC_BATCH_NUM` and `--ocr-rec-batch-num` overrides, with the
+  effective value exposed in model metadata.
+
+### Changed
+
+- GPU OCR defaults to the faster batch size 12. Set the batch setting to `6` when exact
+  output parity with the original OCR path is required.
+
 ## [0.4.0] - 2026-10-30
 
 ### Added
