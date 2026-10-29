@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "label-controllers"
-version = "0.2.0"
+version = "0.3.0"
 description = "Upload a UI screenshot and receive fused clickable controls, OCR text, and an annotated image."
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 license = { text = "MIT" }
 authors = [{ name = "Label Controllers contributors" }]
-keywords = ["computer-use", "gui", "yolo", "ocr", "fastapi", "omniparser"]
+keywords = ["computer-use", "gui", "yolo", "ocr", "fastapi", "omniparser", "tool-calling", "openai"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
@@ -42,6 +42,7 @@ dev = [
 
 [project.scripts]
 label-controllers = "label_controllers.cli:main"
+label-controllers-tool = "label_controllers.tool:main"
 
 [project.urls]
 Homepage = "https://github.com/Amywlp/label-controllers"

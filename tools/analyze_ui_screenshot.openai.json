@@ -1,0 +1,53 @@
+{
+  "type": "function",
+  "function": {
+    "name": "analyze_ui_screenshot",
+    "description": "Analyze the current UI screenshot and return clickable controls, recognized text, semantic roles and exact screenshot coordinates. The tool host supplies the current screenshot to the executor; do not generate or pass image bytes from the model. Use this before clicking or navigating a graphical application.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "include": {
+          "type": "array",
+          "description": "Result groups to return. Use controls for clickable targets, elements for all fused elements, texts for OCR, metadata for runtime/timing details, or annotated_image for a Base64-rendered PNG. Default: controls,texts,metadata.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "controls",
+              "elements",
+              "texts",
+              "metadata",
+              "raw_icons",
+              "raw_ocr",
+              "annotated_image",
+              "all"
+            ]
+          },
+          "default": [
+            "controls",
+            "texts",
+            "metadata"
+          ]
+        },
+        "annotate": {
+          "type": "boolean",
+          "description": "Include a Base64 annotated PNG in the JSON result.",
+          "default": false
+        },
+        "icon_confidence": {
+          "type": "number",
+          "description": "Optional YOLO icon confidence threshold.",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "ocr_confidence": {
+          "type": "number",
+          "description": "Optional OCR confidence threshold.",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "strict": false
+  }
+}

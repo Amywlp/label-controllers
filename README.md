@@ -22,6 +22,7 @@ GitHub 仓库：[Amywlp/label-controllers](https://github.com/Amywlp/label-contr
 - Docker 镜像在构建阶段自动下载并校验 `icon_detect.pt`。
 - CPU、NVIDIA CUDA、Windows DirectML 三种运行路径，共用同一 API 和输出格式。
 - 运行设备、显卡名称、OCR Execution Provider 和分阶段耗时均写入响应元数据。
+- 提供标准 OpenAI / Anthropic Tool Calling 定义、Python 执行器和命令行工具。
 - 可选 API Key 鉴权、上传大小限制、像素限制、CORS、OpenAPI 文档。
 
 ## 快速部署
@@ -65,6 +66,48 @@ NVIDIA Docker 需要 NVIDIA Container Toolkit。DirectML 方式已在 AMD Radeon
 不能直接用于 Linux Docker GPU 推理。CUDA 镜像已完成本地构建和只读容器接口冒烟测试，但仍需在目标 NVIDIA 主机验证 CUDA EP 实例与性能。
 
 完整配置、限制和故障排查见 [docs/GPU.md](docs/GPU.md)。
+
+## 标准 Tool Calling
+
+服务提供与 OpenAI Chat Completions / Responses 兼容的函数工具，同时返回 Anthropic
+Messages 格式：
+
+```http
+GET /api/v1/tools
+```
+
+工具名为 `analyze_ui_screenshot`。语言模型只选择输出字段、置信度和是否标注；当前截图由
+工具执行器绑定，模型不需要生成图片 Base64。静态清单位于：
+
+- `tools/analyze_ui_screenshot.openai.json`
+- `tools/analyze_ui_screenshot.anthropic.json`
+
+Python 客户端：
+
+```python
+from label_controllers.tool import LabelControllersTool
+
+tool = LabelControllersTool(
+    base_url="http://127.0.0.1:8000",
+    screenshot_provider=lambda: screenshot_bytes,
+)
+result = tool.execute_tool_call({
+    "include": ["controls", "texts", "metadata"],
+    "annotate": False,
+})
+```
+
+OpenAI SDK 传递 `tools=[tool.definition]` 即可；完整示例见
+[examples/openai_tool_call.py](examples/openai_tool_call.py)。
+
+命令行：
+
+```bash
+label-controllers-tool --schema
+label-controllers-tool --image screenshot.png --include controls,texts,metadata
+```
+
+完整参数、错误结构和集成方式见 [docs/TOOL.md](docs/TOOL.md)。
 
 ## 调用示例
 
@@ -135,6 +178,7 @@ OpenCV 距离变换得到的建议点击点；`center` 是控件矩形中心。
 | `GET` | `/healthz` | 进程存活检查 |
 | `GET` | `/readyz` | 模型已加载与运行状态 |
 | `GET` | `/api/v1/capabilities` | 字段、格式和限制说明 |
+| `GET` | `/api/v1/tools` | OpenAI / Anthropic 标准工具定义 |
 | `POST` | `/api/v1/analyze` | 上传截图并分析 |
 | `GET` | `/docs` | Swagger UI |
 | `GET` | `/openapi.json` | OpenAPI 3 文档 |
@@ -185,6 +229,8 @@ src/label_controllers/
 ├── accelerator.py  # CPU / CUDA / DirectML 设备解析
 ├── engine.py       # 常驻模型、图片校验、分析编排
 ├── detectors.py    # YOLO / RapidOCR 封装
+├── contracts.py    # 公共响应字段契约
+├── tool.py         # OpenAI / Anthropic 工具客户端与 CLI
 ├── fusion.py       # 控件与文字融合
 ├── annotation.py   # 标注图渲染
 ├── config.py       # 环境变量配置

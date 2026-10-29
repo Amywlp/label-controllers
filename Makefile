@@ -1,4 +1,4 @@
-.PHONY: install model api up up-gpu down logs check format setup-directml
+.PHONY: install model api up up-gpu down logs check format setup-directml tool-schema
 
 install:
 python -m pip install -r requirements.txt
@@ -23,8 +23,8 @@ logs:
 docker compose logs -f api
 
 check:
-ruff check src scripts
-python -m compileall -q src scripts
+ruff check src scripts examples
+python -m compileall -q src scripts examples
 
 format:
 ruff check --fix src
