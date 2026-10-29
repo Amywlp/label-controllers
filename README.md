@@ -1,7 +1,7 @@
 # Label Controllers
 
-[![CI](https://github.com/OWNER/label-controllers/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/label-controllers/actions/workflows/ci.yml)
-[![Container](https://github.com/OWNER/label-controllers/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/OWNER/label-controllers/actions/workflows/docker-publish.yml)
+[![CI](https://github.com/Amywlp/label-controllers/actions/workflows/ci.yml/badge.svg)](https://github.com/Amywlp/label-controllers/actions/workflows/ci.yml)
+[![Container](https://github.com/Amywlp/label-controllers/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Amywlp/label-controllers/actions/workflows/docker-publish.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Label Controllers 是一个面向 Computer Use、UI 自动化和 GUI 测试的截图控件识别服务。
@@ -27,7 +27,7 @@ Label Controllers 是一个面向 Computer Use、UI 自动化和 GUI 测试的�
 需要 Docker 24+ 与 Docker Compose v2。
 
 ```bash
-git clone https://github.com/OWNER/label-controllers.git
+git clone https://github.com/Amywlp/label-controllers.git
 cd label-controllers
 cp .env.example .env
 # 编辑 .env，把 LABEL_CONTROLLERS_API_KEY 改成长随机值
