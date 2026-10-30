@@ -110,6 +110,29 @@ result = tool.analyze_base64(base64_string, include=["controls", "texts"])
 4. 返回原始结构化分析结果；
 5. 将 API 错误转换为 `ToolCallError`。
 
+## a11y 参数与工具
+
+`analyze_ui_screenshot` 多了一个可选参数 `a11y`（对象）：
+
+```jsonc
+{"a11y": {"mode": "cdp", "cdp_url": "http://127.0.0.1:9222", "target": 0}}
+```
+
+- `mode=cdp`：服务端自己连 DevTools 拉无障碍树（需要服务端装 `websocket-client`）。
+- `mode=inline`：模型/主机已采好树，用 `elements` 提交。
+- 传了 `a11y` 后，执行器会自动补上 `a11y` 与 `alignment` 两个返回字段，模型才能看到融合结果。
+
+另有独立工具 `probe_ui_accessibility`（不需要截图），用来回答"这个界面的无障碍树能不能用"：
+
+```jsonc
+{"cdp_url": "http://127.0.0.1:9222", "target": 0}
+```
+
+返回 `verdict.strategy`：`a11y_primary`（直接用 a11y）、`hybrid`（两路互补）、`vision_only`（纯视觉兜底）。
+
+MCP（stdio）服务把两个工具原样暴露，只是多了 `image_base64` / `image_path` 两个传图通道；
+详见 [MCP.md](MCP.md)。
+
 ## OpenAI 示例
 
 安装可选 SDK：

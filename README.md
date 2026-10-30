@@ -23,7 +23,13 @@ GitHub 仓库：[Amywlp/label-controllers](https://github.com/Amywlp/label-contr
 - CPU、NVIDIA CUDA、Windows DirectML 三种运行路径，共用同一 API 和输出格式。
 - 运行设备、显卡名称、OCR Execution Provider 和分阶段耗时均写入响应元数据。
 - 提供标准 OpenAI / Anthropic Tool Calling 定义、Python 执行器和命令行工具。
+- 可选无障碍树（a11y）第三路：`a11y` 参数合并 role/name/矩形，补上纯图标的语义与整块点击区。
+- 新增 `POST /api/v1/a11y/probe`：不传截图即可判断某页面/窗口的无障碍树是否可用。
+- 新增 MCP（stdio）服务 `label-controllers-mcp`，与 REST / Tool Calling 共用同一套能力。
 - 可选 API Key 鉴权、上传大小限制、像素限制、CORS、OpenAPI 文档。
+
+三路融合的设计、判定阈值与实测数据见 [docs/A11Y.md](docs/A11Y.md)；
+MCP 接入见 [docs/MCP.md](docs/MCP.md)。
 
 ## 快速部署
 

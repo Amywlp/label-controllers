@@ -26,9 +26,19 @@ TOOL_DESCRIPTION = (
     "Analyze the current UI screenshot and return clickable controls, recognized text, "
     "semantic roles and exact screenshot coordinates. The tool host supplies the current "
     "screenshot to the executor; do not generate or pass image bytes from the model. "
-    "Use this before clicking or navigating a graphical application."
+    "Use this before clicking or navigating a graphical application. When the target is a "
+    "web page or an Electron app that exposes a DevTools endpoint, pass the optional "
+    "'a11y' argument so accessibility-tree names and boxes are merged with the vision result."
 )
-ALLOWED_ARGUMENTS = {"include", "icon_confidence", "ocr_confidence", "annotate"}
+A11Y_TOOL_NAME = "probe_ui_accessibility"
+A11Y_TOOL_DESCRIPTION = (
+    "Grade whether a live page or Electron window exposes a usable accessibility tree before "
+    "automating it. Connects to a Chrome DevTools Protocol endpoint (or accepts a pre-collected "
+    "tree), reports interactive node counts, naming and coordinate coverage, and recommends "
+    "'a11y_primary', 'hybrid' or 'vision_only'."
+)
+ALLOWED_ARGUMENTS = {"include", "icon_confidence", "ocr_confidence", "annotate", "a11y"}
+ALLOWED_A11Y_KEYS = {"mode", "cdp_url", "target", "url", "timeout_seconds", "elements", "node_count"}
 
 
 class ToolCallError(RuntimeError):
@@ -107,6 +117,62 @@ def openai_tool_schema(name: str = TOOL_NAME) -> dict[str, Any]:
                         "minimum": 0.0,
                         "maximum": 1.0,
                     },
+                    "a11y": {
+                        "type": "object",
+                        "description": (
+                            "Optional accessibility-tree channel. Use mode='cdp' with cdp_url when a "
+                            "Chrome/Electron DevTools endpoint is reachable, or mode='inline' with "
+                            "pre-collected elements. A matched control gains a11y_role/a11y_name/a11y_rect, "
+                            "unnamed icons receive semantic names, and a11y-only nodes are appended as "
+                            "clickable elements."
+                        ),
+                        "properties": {
+                            "mode": {
+                                "type": "string",
+                                "enum": ["off", "cdp", "inline"],
+                                "default": "cdp",
+                            },
+                            "cdp_url": {
+                                "type": "string",
+                                "description": "DevTools endpoint, for example http://127.0.0.1:9222.",
+                            },
+                            "target": {
+                                "type": "integer",
+                                "description": "Index into the page targets reported by /json/list.",
+                                "minimum": 0,
+                                "default": 0,
+                            },
+                            "url": {
+                                "type": "string",
+                                "description": "Optional page to navigate before the tree is read.",
+                            },
+                            "timeout_seconds": {
+                                "type": "number",
+                                "minimum": 1,
+                                "maximum": 120,
+                                "default": 20,
+                            },
+                            "elements": {
+                                "type": "array",
+                                "description": "Inline accessibility nodes, used when mode='inline'.",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "role": {"type": "string"},
+                                        "name": {"type": "string"},
+                                        "rect": {
+                                            "type": "array",
+                                            "items": {"type": "number"},
+                                            "minItems": 4,
+                                            "maxItems": 4,
+                                        },
+                                    },
+                                    "required": ["role"],
+                                },
+                            },
+                        },
+                        "additionalProperties": False,
+                    },
                 },
                 "additionalProperties": False,
             },
@@ -120,6 +186,69 @@ def anthropic_tool_schema(name: str = TOOL_NAME) -> dict[str, Any]:
 
     openai_schema = openai_tool_schema(name)
     function = openai_schema["function"]
+    return {
+        "name": function["name"],
+        "description": function["description"],
+        "input_schema": function["parameters"],
+    }
+
+
+def openai_a11y_tool_schema(name: str = A11Y_TOOL_NAME) -> dict[str, Any]:
+    """Tool that grades accessibility-tree usability before automation starts."""
+
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": A11Y_TOOL_DESCRIPTION,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "enum": ["cdp", "inline"],
+                        "default": "cdp",
+                    },
+                    "cdp_url": {
+                        "type": "string",
+                        "description": "DevTools endpoint, for example http://127.0.0.1:9222.",
+                    },
+                    "target": {"type": "integer", "minimum": 0, "default": 0},
+                    "url": {
+                        "type": "string",
+                        "description": "Optional page to navigate before the tree is read.",
+                    },
+                    "timeout_seconds": {"type": "number", "minimum": 1, "maximum": 120, "default": 20},
+                    "elements": {
+                        "type": "array",
+                        "description": "Inline accessibility nodes, used when mode='inline'.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "role": {"type": "string"},
+                                "name": {"type": "string"},
+                                "rect": {
+                                    "type": "array",
+                                    "items": {"type": "number"},
+                                    "minItems": 4,
+                                    "maxItems": 4,
+                                },
+                            },
+                            "required": ["role"],
+                        },
+                    },
+                },
+                "additionalProperties": False,
+            },
+            "strict": False,
+        },
+    }
+
+
+def anthropic_a11y_tool_schema(name: str = A11Y_TOOL_NAME) -> dict[str, Any]:
+    """Return the a11y probe tool in Anthropic Messages tool format."""
+
+    function = openai_a11y_tool_schema(name)["function"]
     return {
         "name": function["name"],
         "description": function["description"],
@@ -187,6 +316,7 @@ class LabelControllersTool:
         icon_confidence: float | None = None,
         ocr_confidence: float | None = None,
         filename: str | None = None,
+        a11y: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         image_bytes = _coerce_bytes(image)
         include_fields = self._normalize_include(include)
@@ -194,6 +324,13 @@ class LabelControllersTool:
             self._validate_confidence("icon_confidence", icon_confidence)
         if ocr_confidence is not None:
             self._validate_confidence("ocr_confidence", ocr_confidence)
+        if a11y is not None:
+            a11y = self._validate_a11y(a11y)
+            # Make the merge visible by default: without "alignment" the caller
+            # cannot tell which controls actually matched the a11y tree.
+            for field_name in ("alignment", "a11y"):
+                if "all" not in include_fields and field_name not in include_fields:
+                    include_fields.append(field_name)
 
         upload_name = filename or "screenshot.png"
         content_type = mimetypes.guess_type(upload_name)[0] or "application/octet-stream"
@@ -205,6 +342,8 @@ class LabelControllersTool:
             data["icon_confidence"] = str(icon_confidence)
         if ocr_confidence is not None:
             data["ocr_confidence"] = str(ocr_confidence)
+        if a11y is not None:
+            data["a11y"] = json.dumps(a11y, ensure_ascii=False)
         try:
             response = self.session.post(
                 f"{self.base_url}/api/v1/analyze",
@@ -248,6 +387,7 @@ class LabelControllersTool:
         icon_confidence: float | None = None,
         ocr_confidence: float | None = None,
         filename: str = "screenshot.png",
+        a11y: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Analyze image bytes encoded as standard Base64 or a data URL."""
 
@@ -257,6 +397,7 @@ class LabelControllersTool:
             icon_confidence=icon_confidence,
             ocr_confidence=ocr_confidence,
             filename=filename,
+            a11y=a11y,
         )
 
     def execute_tool_call(
@@ -297,12 +438,97 @@ class LabelControllersTool:
                 ) from exc
         else:
             image_bytes = image
+        a11y_spec = parsed.get("a11y")
+        if a11y_spec is not None and not isinstance(a11y_spec, Mapping):
+            raise ToolCallError("a11y must be a JSON object.", code="invalid_arguments")
         return self.analyze(
             image_bytes,
             include=selected_include,
             icon_confidence=parsed.get("icon_confidence"),
             ocr_confidence=parsed.get("ocr_confidence"),
+            a11y=a11y_spec,
         )
+
+    def probe_a11y(
+        self,
+        *,
+        cdp_url: str | None = None,
+        target: int = 0,
+        url: str | None = None,
+        timeout_seconds: float = 20.0,
+        elements: Sequence[Mapping[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Ask the service whether an a11y tree is usable (no screenshot needed)."""
+
+        if elements is not None:
+            payload: dict[str, Any] = {"mode": "inline", "elements": list(elements)}
+        else:
+            if not cdp_url:
+                raise ToolCallError("probe_a11y needs cdp_url or elements.", code="invalid_arguments")
+            payload = {
+                "mode": "cdp",
+                "cdp_url": cdp_url,
+                "target": int(target),
+                "timeout_seconds": float(timeout_seconds),
+            }
+            if url:
+                payload["url"] = url
+
+        headers = {"Accept": "application/json", "Content-Type": "application/json"}
+        if self.api_key:
+            headers["X-API-Key"] = self.api_key
+        try:
+            response = self.session.post(
+                f"{self.base_url}/api/v1/a11y/probe",
+                headers=headers,
+                json=payload,
+                timeout=self.timeout_seconds,
+            )
+        except requests.RequestException as exc:
+            raise ToolCallError(
+                f"Could not reach Label Controllers at {self.base_url}: {exc}",
+                code="connection_error",
+            ) from exc
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise ToolCallError(
+                f"Label Controllers returned HTTP {response.status_code} without JSON.",
+                code="invalid_response",
+                status_code=response.status_code,
+            ) from exc
+        if response.status_code >= 400:
+            error = body.get("error", {}) if isinstance(body, dict) else {}
+            raise ToolCallError(
+                str(error.get("message") or f"Label Controllers returned HTTP {response.status_code}."),
+                code=str(error.get("code") or "http_error"),
+                status_code=response.status_code,
+                details=error.get("details"),
+            )
+        if not isinstance(body, dict):
+            raise ToolCallError("Label Controllers returned an unexpected JSON value.", code="invalid_response")
+        return body
+
+    @staticmethod
+    def _validate_a11y(spec: Mapping[str, Any]) -> dict[str, Any]:
+        if not isinstance(spec, Mapping):
+            raise ToolCallError("a11y must be a JSON object.", code="invalid_arguments")
+        unknown = sorted(set(spec) - ALLOWED_A11Y_KEYS)
+        if unknown:
+            raise ToolCallError(
+                f"Unknown a11y key(s): {', '.join(unknown)}.",
+                code="invalid_arguments",
+                details={"allowed": sorted(ALLOWED_A11Y_KEYS)},
+            )
+        fallback = "inline" if spec.get("elements") else "off"
+        mode = str(spec.get("mode") or ("cdp" if spec.get("cdp_url") else fallback))
+        if mode not in {"off", "cdp", "inline"}:
+            raise ToolCallError("a11y.mode must be one of: off, cdp, inline.", code="invalid_arguments")
+        if mode == "cdp" and not spec.get("cdp_url"):
+            raise ToolCallError("a11y.mode='cdp' requires a11y.cdp_url.", code="invalid_arguments")
+        if mode == "inline" and not spec.get("elements"):
+            raise ToolCallError("a11y.mode='inline' requires a11y.elements.", code="invalid_arguments")
+        return dict(spec, mode=mode)
 
     @staticmethod
     def _parse_arguments(arguments: Mapping[str, Any] | str | None) -> dict[str, Any]:

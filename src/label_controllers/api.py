@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 import secrets
@@ -8,7 +9,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,10 +20,18 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
+from . import a11y as a11y_channel
 from .config import Settings
 from .contracts import PUBLIC_INCLUDES
 from .engine import AnalysisEngine, ImageTooLargeError, ImageValidationError
-from .tool import TOOL_NAME, anthropic_tool_schema, openai_tool_schema
+from .tool import (
+    A11Y_TOOL_NAME,
+    TOOL_NAME,
+    anthropic_a11y_tool_schema,
+    anthropic_tool_schema,
+    openai_a11y_tool_schema,
+    openai_tool_schema,
+)
 
 logger = logging.getLogger("label_controllers.api")
 settings = Settings.from_env()
@@ -241,6 +250,8 @@ async def capabilities(request: Request) -> dict[str, Any]:
                 "metadata": "Model information, fused counts, timings and output field list.",
                 "raw_icons": "Raw OmniParser YOLO detections.",
                 "raw_ocr": "Raw RapidOCR detections.",
+                "a11y": "Accessibility-tree summary and node list when the a11y channel was requested.",
+                "alignment": "Vision \u2194 accessibility alignment: matched pairs, match rates and text conflicts.",
                 "annotated_image": "Base64-encoded annotated PNG in the JSON response.",
             },
         },
@@ -253,7 +264,9 @@ async def capabilities(request: Request) -> dict[str, Any]:
         "tools": {
             "discovery": "/api/v1/tools",
             "openai_tool_name": TOOL_NAME,
+            "a11y_tool_name": A11Y_TOOL_NAME,
             "python_client": "label_controllers.tool:LabelControllersTool",
+            "mcp_server": "label-controllers-mcp",
         },
     }
 
@@ -267,19 +280,27 @@ async def tools() -> dict[str, Any]:
     """
 
     return {
-        "schema_version": "1.0",
-        "tools": [openai_tool_schema()],
-        "anthropic_tools": [anthropic_tool_schema()],
+        "schema_version": "1.1",
+        "tools": [openai_tool_schema(), openai_a11y_tool_schema()],
+        "anthropic_tools": [anthropic_tool_schema(), anthropic_a11y_tool_schema()],
         "execution": {
             "endpoint": "/api/v1/analyze",
+            "probe_endpoint": "/api/v1/a11y/probe",
             "transport": "multipart/form-data",
             "image_field": "file",
+            "a11y_field": "a11y",
             "image_handling": (
                 "The tool host supplies the current screenshot bytes. "
                 "The model should call the tool without generating image data."
             ),
+            "a11y_handling": (
+                "Pass the a11y object either as the multipart 'a11y' field (JSON string) for "
+                "/api/v1/analyze, or as the JSON body of /api/v1/a11y/probe. "
+                "mode='cdp' pulls the tree server-side; mode='inline' accepts a pre-collected one."
+            ),
             "python_client": "label_controllers.tool:LabelControllersTool",
             "cli": "label-controllers-tool",
+            "mcp": "label-controllers-mcp",
         },
     }
 
@@ -324,6 +345,17 @@ async def analyze(
         float | None,
         Form(ge=0.0, le=1.0, description="Optional OCR confidence override for this request."),
     ] = None,
+    a11y: Annotated[
+        str | None,
+        Form(
+            description=(
+                "Optional accessibility-tree channel, as JSON. Use "
+                '{"mode":"cdp","cdp_url":"http://127.0.0.1:9222","target":0} to let the service '
+                'pull the tree, or {"mode":"inline","elements":[{"role":"button","name":"Log in",'
+                '"rect":[x1,y1,x2,y2]}]} to submit a pre-collected tree.'
+            )
+        ),
+    ] = None,
     _: Annotated[None, Depends(require_api_key)] = None,
 ):
     """Analyze one screenshot and select exactly which result groups to return.
@@ -334,6 +366,8 @@ async def analyze(
     * `include=controls,texts,metadata` is the default.
     * `include=all` additionally returns raw model output and a base64 PNG.
     * `response_format=png` streams an annotated PNG directly.
+    * Passing `a11y` merges accessibility roles/names/boxes into the same element list;
+      add `include=alignment` to see the match report.
     """
     try:
         requested_includes = _parse_includes(include)
@@ -361,6 +395,19 @@ async def analyze(
     if not raw:
         return _error(request, 415, "empty_image", "The uploaded image is empty.")
 
+    a11y_spec: dict[str, Any] | None = None
+    if a11y:
+        try:
+            parsed_a11y = json.loads(a11y)
+        except json.JSONDecodeError:
+            return _error(request, 400, "invalid_a11y", "The a11y form field must be valid JSON.")
+        if not isinstance(parsed_a11y, dict):
+            return _error(request, 400, "invalid_a11y", "The a11y form field must be a JSON object.")
+        a11y_spec = parsed_a11y
+        if "all" not in requested_includes:
+            # A merge the caller cannot inspect is a merge they cannot trust.
+            requested_includes.update({"alignment", "a11y"})
+
     engine: AnalysisEngine = request.app.state.engine
     try:
         result = await run_in_threadpool(
@@ -371,6 +418,7 @@ async def analyze(
             icon_confidence=icon_confidence,
             ocr_confidence=ocr_confidence,
             render_annotated=response_format == "png" or "annotated_image" in requested_includes,
+            a11y=a11y_spec,
         )
     except ImageTooLargeError as exc:
         return _error(request, 413, "upload_too_large", str(exc))
@@ -395,6 +443,37 @@ async def analyze(
 
     payload = result.to_payload(requested_includes)
     return JSONResponse(content=payload, headers=result_headers)
+
+
+@app.post("/api/v1/a11y/probe", tags=["Analysis"])
+async def a11y_probe(
+    request: Request,
+    payload: Annotated[
+        dict[str, Any],
+        Body(
+            description=(
+                'Either {"mode":"cdp","cdp_url":"http://127.0.0.1:9222","target":0} or '
+                '{"mode":"inline","elements":[{"role":"button","name":"Log in","rect":[0,0,10,10]}]}.'
+            )
+        ),
+    ],
+    _: Annotated[None, Depends(require_api_key)] = None,
+):
+    """Grade an accessibility tree before automating: usable, partial or useless?
+
+    Returns the interative node list, naming/coordinate coverage and a strategy
+    verdict (`a11y_primary`, `hybrid` or `vision_only`) plus the checks behind it.
+    No screenshot is needed; this is a metadata-only endpoint.
+    """
+    try:
+        result = await run_in_threadpool(a11y_channel.probe, payload)
+    except a11y_channel.A11yError as exc:
+        return _error(request, 400, exc.code, str(exc), details=exc.details)
+    headers = {
+        "Cache-Control": "no-store",
+        "X-A11y-Strategy": str(result["verdict"]["strategy"]),
+    }
+    return JSONResponse(content=jsonable_encoder(result), headers=headers)
 
 
 if __name__ == "__main__":

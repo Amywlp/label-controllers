@@ -5,6 +5,7 @@ import io
 import threading
 import time
 import warnings
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,6 +13,7 @@ from typing import Any
 
 from PIL import Image, UnidentifiedImageError
 
+from . import a11y as a11y_channel
 from .accelerator import resolve_ocr_provider, resolve_runtime_devices
 from .annotation import render_annotation
 from .config import Settings
@@ -41,6 +43,8 @@ class AnalysisResult:
     raw_ocr: dict[str, Any]
     metadata: dict[str, Any]
     annotated_png: bytes | None = field(default=None, repr=False)
+    a11y: dict[str, Any] | None = None
+    alignment: dict[str, Any] | None = None
 
     def to_payload(self, includes: set[str]) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -58,6 +62,10 @@ class AnalysisResult:
             payload["elements"] = self.elements
         if "texts" in includes:
             payload["texts"] = self.texts
+        if "a11y" in includes and self.a11y is not None:
+            payload["a11y"] = _public_a11y(self.a11y)
+        if "alignment" in includes and self.alignment is not None:
+            payload["alignment"] = self.alignment
         if "raw_icons" in includes:
             payload["raw_icons"] = self.raw_icons
         if "raw_ocr" in includes:
@@ -78,6 +86,21 @@ class AnalysisResult:
                 "data": base64.b64encode(self.annotated_png).decode("ascii"),
             }
         return payload
+
+
+def _public_a11y(section: Mapping[str, Any]) -> dict[str, Any]:
+    """Strip per-node CDP bookkeeping before the tree leaves the service."""
+
+    public = {key: value for key, value in section.items() if key != "elements"}
+    public["elements"] = [
+        {
+            "role": item.get("role"),
+            "name": item.get("name") or "",
+            "rect": item.get("rect"),
+        }
+        for item in section.get("elements") or []
+    ]
+    return public
 
 
 class AnalysisEngine:
@@ -142,6 +165,11 @@ class AnalysisEngine:
                 "device": self.runtime.ocr_backend,
                 "provider": self.runtime.ocr_provider,
             },
+            "a11y": {
+                "name": "Accessibility tree (CDP / inline)",
+                "roles": sorted(a11y_channel.INTERACTIVE_ROLES),
+                "modes": ["cdp", "inline"],
+            },
             "runtime": runtime,
         }
 
@@ -168,6 +196,7 @@ class AnalysisEngine:
         icon_confidence: float | None = None,
         ocr_confidence: float | None = None,
         render_annotated: bool = False,
+        a11y: Mapping[str, Any] | str | None = None,
     ) -> AnalysisResult:
         if not image_bytes:
             raise ImageValidationError("The uploaded image is empty.")
@@ -177,6 +206,21 @@ class AnalysisEngine:
         with self._lock:
             self.request_count += 1
             started = time.perf_counter()
+
+            # The a11y tree is collected before inference so it is as close as
+            # possible to the moment the screenshot was taken. A failure here
+            # degrades to vision-only and never fails the request.
+            a11y_section: dict[str, Any] | None = None
+            a11y_error: dict[str, Any] | None = None
+            a11y_seconds = 0.0
+            if a11y:
+                a11y_started = time.perf_counter()
+                try:
+                    a11y_section = a11y_channel.collect(a11y)
+                except a11y_channel.A11yError as exc:
+                    a11y_error = {"code": exc.code, "message": str(exc)}
+                a11y_seconds = time.perf_counter() - a11y_started
+
             with TemporaryDirectory(prefix="label-controllers-") as temp_dir:
                 canonical_path = Path(temp_dir) / "input.png"
                 decode_seconds = self._normalize_image(image_bytes, canonical_path)
@@ -195,6 +239,12 @@ class AnalysisEngine:
                 fusion_seconds = time.perf_counter() - fusion_started
 
                 elements = [self._public_element(item) for item in fused["elements"]]
+                alignment: dict[str, Any] | None = None
+                if a11y_section is not None:
+                    alignment_started = time.perf_counter()
+                    elements, alignment = a11y_channel.merge(elements, a11y_section)
+                    fusion_seconds += time.perf_counter() - alignment_started
+
                 controls = [item for item in elements if item["clickable"]]
                 ocr_public = [
                     {
@@ -220,13 +270,14 @@ class AnalysisEngine:
 
                 width, height = fused["image_size"]
                 metadata = {
-                    "schema_version": "1.0",
+                    "schema_version": "1.1",
                     "filename": Path(filename).name[:255],
                     "models": self.model_info,
                     "runtime": self.runtime.as_dict(),
                     "model_load_seconds": self.model_load_seconds,
                     "timing_seconds": {
                         "decode_and_normalize": round(decode_seconds, 4),
+                        "a11y_collect": round(a11y_seconds, 4),
                         "icon": round(icon_seconds, 4),
                         "ocr": round(ocr_seconds, 4),
                         "fusion": round(fusion_seconds, 4),
@@ -234,6 +285,16 @@ class AnalysisEngine:
                         "total": round(total_seconds, 4),
                     },
                     "fused_counts": fused["counts"],
+                    "a11y": {
+                        "requested": bool(a11y),
+                        "available": a11y_section is not None,
+                        "mode": (a11y_section or {}).get("mode"),
+                        "node_count": (a11y_section or {}).get("node_count"),
+                        "interactive_count": len((a11y_section or {}).get("elements") or []),
+                        "collect_seconds": round(a11y_seconds, 4),
+                        "error": a11y_error,
+                        "alignment": alignment,
+                    },
                 }
                 return AnalysisResult(
                     request_id=request_id,
@@ -257,6 +318,8 @@ class AnalysisEngine:
                     },
                     metadata=metadata,
                     annotated_png=annotated_png,
+                    a11y=a11y_section,
+                    alignment=alignment,
                 )
 
     def _normalize_image(self, raw: bytes, target: Path) -> float:

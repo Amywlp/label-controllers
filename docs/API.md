@@ -260,6 +260,56 @@ Returns `200` once the YOLO and OCR models are loaded. Response includes model l
 warm-up timings, processed request count, uptime, model details and the resolved accelerator
 under `models.runtime`.
 
+## 无障碍树字段（`a11y`）
+
+`POST /api/v1/analyze` 的 multipart 里可以多带一个 `a11y` 字段（JSON 字符串），
+把无障碍树的 role/name/矩形并入同一份元素表。
+
+```jsonc
+{ "mode": "cdp", "cdp_url": "http://127.0.0.1:9222", "target": 0 }
+```
+
+```jsonc
+{ "mode": "inline", "elements": [
+  {"role": "button", "name": "登录", "rect": [1310, 12, 1378, 53]}
+]}
+```
+
+传了 `a11y` 后服务端会自动把 `a11y` 与 `alignment` 加入返回字段（除非 `include=all`）。
+融合细节、冲突处理与阈值见 [A11Y.md](A11Y.md)。
+
+## `POST /api/v1/a11y/probe`
+
+不需要截图，只判断无障碍树能不能当控件源用。
+
+请求体：
+
+```jsonc
+{"mode": "cdp", "cdp_url": "http://127.0.0.1:9222", "target": 0}
+```
+
+响应（节选）：
+
+```jsonc
+{
+  "mode": "cdp",
+  "node_count": 268,
+  "elements": [{"role": "button", "name": "登录", "rect": [1310, 12, 1378, 53]}],
+  "stats": {"interactive_count": 35, "named_count": 35, "named_rate": 1.0,
+            "coord_count": 35, "coord_rate": 1.0},
+  "verdict": {
+    "strategy": "a11y_primary",
+    "summary": "Accessibility tree is rich and named; prefer it for semantics and click targets.",
+    "checks": {"L1_tree_size": true, "L2_interactive_coverage": true,
+               "L3_named_rate": true, "L4_coord_rate": true}
+  }
+}
+```
+
+响应头 `X-A11y-Strategy` 与 `verdict.strategy` 一致（`a11y_primary` / `hybrid` / `vision_only`）。
+错误时返回统一错误体，`code` 可能是 `a11y_cdp_connect`、`a11y_no_page_target`、
+`a11y_dependency_missing`、`a11y_empty_tree`、`a11y_invalid_payload`。
+
 ## Coordinate system
 
 All coordinates are `[x1, y1, x2, y2]` pixel rectangles relative to the uploaded image.

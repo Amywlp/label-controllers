@@ -9,6 +9,8 @@ PUBLIC_INCLUDES = (
     "metadata",
     "raw_icons",
     "raw_ocr",
+    "a11y",
+    "alignment",
     "annotated_image",
 )
 
