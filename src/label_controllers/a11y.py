@@ -472,7 +472,7 @@ def _viewport_box(a11y: Mapping[str, Any]) -> list[float] | None:
 
     viewport = a11y.get("viewport")
     width = height = None
-    if isinstance(viewport, (list, tuple)) and len(viewport) >= 2:
+    if isinstance(viewport, list | tuple) and len(viewport) >= 2:
         width, height = viewport[0], viewport[1]
     elif isinstance(viewport, Mapping):
         width = viewport.get("width") or viewport.get("clientWidth")
