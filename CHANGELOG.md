@@ -3,6 +3,27 @@
 All notable changes are documented here. The project follows semantic versioning once
 a tagged public release exists.
 
+## [0.4.1] - 2026-10-31
+
+### Fixed
+
+- `a11y` target selection can pin a page by URL substring (`target_url`), because Chrome sorts
+  `/json/list` by recency and the numeric index drifts on a real desktop with many tabs.
+- Off-screen accessibility nodes are no longer appended as clickable elements. The AX tree covers the
+  whole document; on a GitHub repo page only 82 of 184 interactive nodes were inside a 1399x855
+  viewport, so the previous behaviour handed callers 102 unclickable coordinates. Report gains
+  `skipped_offscreen`, `skipped_no_rect` and `visible_interactive`.
+- Value-like roles (`textbox`, `searchbox`, `combobox`, `spinbutton`, `slider`, `listbox`, `option`)
+  no longer count as text conflicts: the a11y name is a label while OCR reads the value, so they are
+  different layers. The label is exposed as `a11y_label`; `value_role_matches` is reported.
+  On a Gradio UI this cleared 8 false conflicts out of 24 matches.
+
+### Added
+
+- Field-trial results for GitHub, Bilibili, a Gradio UI (GPT-SoVITS) and a canvas app in
+  `docs/A11Y.md`, plus a click-accuracy experiment (8/9 elements hit; the only miss was a plain text
+  block that only the vision channel proposed).
+
 ## [0.4.0] - 2026-10-31
 
 ### Added

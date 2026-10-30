@@ -35,6 +35,8 @@ def _a11y_spec(args: argparse.Namespace) -> dict | None:
         spec: dict = {"mode": "cdp", "cdp_url": args.a11y_cdp}
         if getattr(args, "a11y_target", 0):
             spec["target"] = args.a11y_target
+        if getattr(args, "a11y_target_url", None):
+            spec["target_url"] = args.a11y_target_url
         if getattr(args, "a11y_url", None):
             spec["url"] = args.a11y_url
         return spec
@@ -161,6 +163,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="DevTools endpoint for the accessibility channel, e.g. http://127.0.0.1:9222",
     )
     analyze_parser.add_argument("--a11y-target", type=int, default=0, help="Page target index for --a11y-cdp")
+    analyze_parser.add_argument(
+        "--a11y-target-url",
+        default=None,
+        help="Pin the CDP page by URL substring (more stable than the index)",
+    )
     analyze_parser.add_argument("--a11y-url", default=None, help="Navigate the CDP target before reading the tree")
     analyze_parser.add_argument("--a11y-json", default=None, help="Pre-collected a11y tree JSON file")
     analyze_parser.set_defaults(handler=analyze_command)
@@ -168,6 +175,7 @@ def build_parser() -> argparse.ArgumentParser:
     probe_parser = subparsers.add_parser("a11y-probe", help="Grade an accessibility tree without a screenshot")
     probe_parser.add_argument("--a11y-cdp", default=None, help="DevTools endpoint, e.g. http://127.0.0.1:9222")
     probe_parser.add_argument("--a11y-target", type=int, default=0)
+    probe_parser.add_argument("--a11y-target-url", default=None, help="Pin the page by URL substring")
     probe_parser.add_argument("--a11y-url", default=None)
     probe_parser.add_argument("--a11y-json", default=None, help="Pre-collected a11y tree JSON file")
     probe_parser.add_argument("--output", default=None, help="Write the report to this path")

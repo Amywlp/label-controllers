@@ -152,10 +152,36 @@ def _border_box(client: CDPClient, backend_node_id: int | None) -> list[int] | N
     return [round(min(xs)), round(min(ys)), round(max(xs)), round(max(ys))]
 
 
+def _select_page(
+    pages: list[dict[str, Any]],
+    *,
+    target: int = 0,
+    target_url: str | None = None,
+) -> dict[str, Any]:
+    """Pick a page target by URL substring first, falling back to the index.
+
+    Real desktops keep many tabs open, so ``target`` alone is unstable: Chrome
+    sorts /json/list by recency. ``target_url`` pins the page deterministically.
+    """
+
+    if target_url:
+        needle = target_url.strip().lower()
+        for page in pages:
+            if needle and needle in str(page.get("url") or "").lower():
+                return page
+        raise A11yError(
+            f"No page target matches url substring {target_url!r}.",
+            code="a11y_no_page_target",
+            details={"open_pages": [page.get("url") for page in pages][:20]},
+        )
+    return pages[min(max(target, 0), len(pages) - 1)]
+
+
 def collect_from_cdp(
     cdp_url: str,
     *,
     target: int = 0,
+    target_url: str | None = None,
     url: str | None = None,
     timeout: float = 20.0,
     navigate_wait: float = 2.5,
@@ -163,7 +189,7 @@ def collect_from_cdp(
     """Pull the interactive a11y nodes (role/name/border box) from a live page."""
 
     pages = _list_targets(cdp_url, timeout)
-    page = pages[min(target, len(pages) - 1)]
+    page = _select_page(pages, target=target, target_url=target_url)
     client = CDPClient(page["webSocketDebuggerUrl"], timeout=timeout)
     try:
         if url:
@@ -311,6 +337,7 @@ def collect(spec: Mapping[str, Any] | str | None) -> dict[str, Any] | None:
         return collect_from_cdp(
             cdp_url,
             target=int(spec.get("target") or 0),
+            target_url=spec.get("target_url") or None,
             url=spec.get("url") or None,
             timeout=float(spec.get("timeout_seconds") or 20.0),
         )
@@ -435,6 +462,33 @@ def align(
     return pairs, used_vision, used_a11y
 
 
+VALUE_ROLES = frozenset(
+    {"textbox", "searchbox", "combobox", "spinbutton", "slider", "listbox", "option"}
+)
+
+
+def _viewport_box(a11y: Mapping[str, Any]) -> list[float] | None:
+    """Return [0, 0, width, height] when the collector reported a viewport."""
+
+    viewport = a11y.get("viewport")
+    width = height = None
+    if isinstance(viewport, (list, tuple)) and len(viewport) >= 2:
+        width, height = viewport[0], viewport[1]
+    elif isinstance(viewport, Mapping):
+        width = viewport.get("width") or viewport.get("clientWidth")
+        height = viewport.get("height") or viewport.get("clientHeight")
+    try:
+        if width and height:
+            return [0.0, 0.0, float(width), float(height)]
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
+def _intersects(rect: Sequence[float], box: Sequence[float]) -> bool:
+    return rect[0] < box[2] and rect[2] > box[0] and rect[1] < box[3] and rect[3] > box[1]
+
+
 def merge(
     vision_elements: Sequence[Mapping[str, Any]],
     a11y: Mapping[str, Any],
@@ -448,6 +502,10 @@ def merge(
     """
 
     a11y_elements = list(a11y.get("elements") or [])
+    bounds = _viewport_box(a11y)
+    skipped_offscreen = 0
+    skipped_no_rect = 0
+    value_role_matches = 0
     pairs, used_vision, used_a11y = align(vision_elements, a11y_elements)
 
     merged: list[dict[str, Any]] = []
@@ -471,9 +529,19 @@ def merge(
         }
         if "a11y" not in item["sources"]:
             item["sources"].append("a11y")
+        role = str(node.get("role") or "")
+        if role in VALUE_ROLES:
+            # For inputs the a11y name is the label while the OCR text is the
+            # value, so they are different layers, not a contradiction.
+            value_role_matches += 1
+            item["a11y_label"] = item["a11y_name"]
+            item["a11y_alignment"]["conflict"] = False
+            if not item.get("text"):
+                item["text"] = item["a11y_name"]
+                item["a11y_filled"] = True
         # A semantic name beats OCR text when the two channels agree, and a
         # whole-button a11y box is a safer click target than a text-only box.
-        if item.get("a11y_name") and (not item.get("text") or pair["text_similarity"] >= 0.6):
+        elif item.get("a11y_name") and (not item.get("text") or pair["text_similarity"] >= 0.6):
             if not item.get("text"):
                 item["a11y_filled"] = True
             item["text"] = item["a11y_name"]
@@ -490,6 +558,12 @@ def merge(
             continue
         rect = node.get("rect")
         if not rect:
+            skipped_no_rect += 1
+            continue
+        if bounds and not _intersects(rect, bounds):
+            # Off-screen nodes are still in the tree; appending them would hand
+            # the caller coordinates outside the screenshot.
+            skipped_offscreen += 1
             continue
         merged.append(
             {
@@ -513,16 +587,24 @@ def merge(
         next_id += 1
 
     vision_total = len(vision_elements)
-    conflicts = [pair for pair in pairs if pair["conflict"]]
+    conflicts = [
+        pair
+        for pair in pairs
+        if pair["conflict"] and a11y_elements[pair["a11y_index"]].get("role") not in VALUE_ROLES
+    ]
     report = {
         "source": a11y.get("mode"),
         "node_count": a11y.get("node_count"),
         "interactive_count": len(a11y_elements),
+        "visible_interactive": len(a11y_elements) - skipped_offscreen - skipped_no_rect,
         "matched": len(pairs),
         "vision_to_a11y_rate": round(len(used_vision) / vision_total, 3) if vision_total else 0.0,
         "a11y_to_vision_rate": round(len(used_a11y) / len(a11y_elements), 3) if a11y_elements else 0.0,
         "text_conflicts": len(conflicts),
+        "value_role_matches": value_role_matches,
         "a11y_only_added": len(merged) - vision_total,
+        "skipped_offscreen": skipped_offscreen,
+        "skipped_no_rect": skipped_no_rect,
         "semantic_filled": sum(1 for item in merged if item.get("a11y_filled")),
         "conflict_examples": [
             {"vision": pair["vision_text"], "a11y": pair["a11y_name"], "iou": pair["iou"]}

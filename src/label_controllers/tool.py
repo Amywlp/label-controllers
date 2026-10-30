@@ -38,7 +38,16 @@ A11Y_TOOL_DESCRIPTION = (
     "'a11y_primary', 'hybrid' or 'vision_only'."
 )
 ALLOWED_ARGUMENTS = {"include", "icon_confidence", "ocr_confidence", "annotate", "a11y"}
-ALLOWED_A11Y_KEYS = {"mode", "cdp_url", "target", "url", "timeout_seconds", "elements", "node_count"}
+ALLOWED_A11Y_KEYS = {
+    "mode",
+    "cdp_url",
+    "target",
+    "target_url",
+    "url",
+    "timeout_seconds",
+    "elements",
+    "node_count",
+}
 
 
 class ToolCallError(RuntimeError):
@@ -142,6 +151,10 @@ def openai_tool_schema(name: str = TOOL_NAME) -> dict[str, Any]:
                                 "minimum": 0,
                                 "default": 0,
                             },
+                            "target_url": {
+                                "type": "string",
+                                "description": "Pin the page by URL substring (stable in multi-tab desktops).",
+                            },
                             "url": {
                                 "type": "string",
                                 "description": "Optional page to navigate before the tree is read.",
@@ -214,6 +227,10 @@ def openai_a11y_tool_schema(name: str = A11Y_TOOL_NAME) -> dict[str, Any]:
                         "description": "DevTools endpoint, for example http://127.0.0.1:9222.",
                     },
                     "target": {"type": "integer", "minimum": 0, "default": 0},
+                    "target_url": {
+                        "type": "string",
+                        "description": "Pin the page by URL substring; more stable than target in multi-tab desktops.",
+                    },
                     "url": {
                         "type": "string",
                         "description": "Optional page to navigate before the tree is read.",
@@ -454,6 +471,7 @@ class LabelControllersTool:
         *,
         cdp_url: str | None = None,
         target: int = 0,
+        target_url: str | None = None,
         url: str | None = None,
         timeout_seconds: float = 20.0,
         elements: Sequence[Mapping[str, Any]] | None = None,
@@ -471,6 +489,8 @@ class LabelControllersTool:
                 "target": int(target),
                 "timeout_seconds": float(timeout_seconds),
             }
+            if target_url:
+                payload["target_url"] = target_url
             if url:
                 payload["url"] = url
 

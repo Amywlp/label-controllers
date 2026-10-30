@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "label-controllers"
-version = "0.4.0"
+version = "0.4.1"
 description = "Upload a UI screenshot and receive fused clickable controls from YOLO + OCR + the accessibility tree, with an annotated image."
 readme = "README.md"
 requires-python = ">=3.10,<3.13"

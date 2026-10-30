@@ -70,6 +70,10 @@
               "minimum": 0,
               "default": 0
             },
+            "target_url": {
+              "type": "string",
+              "description": "Pin the page by URL substring (stable in multi-tab desktops)."
+            },
             "url": {
               "type": "string",
               "description": "Optional page to navigate before the tree is read."
