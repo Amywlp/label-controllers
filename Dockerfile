@@ -44,7 +44,7 @@ COPY src ./src
 
 RUN pip install --upgrade pip setuptools wheel \
     && pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt \
-    && pip install --no-deps -e .
+    && pip install --no-deps -e ".[a11y]"
 
 COPY --from=model /models/icon_detect.pt /app/models/icon_detect.pt
 

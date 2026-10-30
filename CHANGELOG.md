@@ -3,6 +3,34 @@
 All notable changes are documented here. The project follows semantic versioning once
 a tagged public release exists.
 
+## [0.4.0] - 2026-10-31
+
+### Added
+
+- Third input channel: accessibility tree (a11y), merged with the YOLO icon and RapidOCR text channels.
+  - `a11y` multipart/JSON field with `mode=cdp` (server pulls `Accessibility.getFullAXTree`) or
+    `mode=inline` (caller submits pre-collected nodes).
+  - Deterministic one-to-one alignment (IoU + containment + text similarity) with private-use glyph
+    stripping, conflict reporting and `sources` tagging per element.
+  - Unmatched a11y nodes are appended as `type="a11y_only"` clickable elements; unnamed icons gain
+    semantic names instead of being dropped.
+- `POST /api/v1/a11y/probe`: grade an accessibility tree (node count, naming/coordinate coverage,
+  `a11y_primary` / `hybrid` / `vision_only` verdict) without uploading a screenshot.
+- `a11y` and `alignment` response fields; `metadata.a11y` carries collection timing and the merge report.
+- `probe_ui_accessibility` tool definition (OpenAI + Anthropic) and `LabelControllersTool.probe_a11y`.
+- MCP (stdio) server: `label-controllers-mcp` / `python -m label_controllers.mcp_server`,
+  exposing both tools with `image_base64` / `image_path` carriers.
+- CLI: `--a11y-cdp` / `--a11y-target` / `--a11y-url` / `--a11y-json` on `analyze`, new `a11y-probe`
+  and `mcp` subcommands.
+- `docs/A11Y.md`, `docs/MCP.md`, `examples/mcp_client.py`, `tests/test_a11y.py`.
+
+### Changed
+
+- `include` accepts `a11y` and `alignment`; passing `a11y` enables both automatically.
+- `GET /api/v1/tools` returns both tool definitions and documents the a11y payload shape.
+- Optional dependency group `a11y` (`websocket-client`); the inline path needs no extra dependency.
+- Version bumped to `0.4.0`.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added
