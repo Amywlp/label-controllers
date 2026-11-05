@@ -40,6 +40,7 @@ Consumes `multipart/form-data` and returns JSON or an annotated PNG.
 - `controls`: clickable fused controls only.
 - `elements`: every fused element, including containers and text-only elements.
 - `texts`: all OCR text blocks.
+- `codes`: decoded/detected QR and barcode regions, never clickable; enables the code channel.
 - `metadata`: model, timing, counts and output-field information.
 - `raw_icons`: raw YOLO boxes.
 - `raw_ocr`: raw OCR boxes.
@@ -48,6 +49,19 @@ Consumes `multipart/form-data` and returns JSON or an annotated PNG.
 
 Every JSON response includes `request_id` and the `image` object even when those fields
 are not listed in `include`.
+
+| Response field | Description |
+|---|---|
+| `codes` | Code elements also appended to `elements` after the a11y merge. `state="decoded"` means `text` contains the full payload; `state="detected"` means only the region was detected and `text` is empty. Every code has `type="code"`, `source="zxing"`, `clickable=false`, `click=null`, and null confidence fields. |
+
+Request `include=codes` (or `include=all`) to run this channel. Requesting a11y or an
+annotated image alone does not enable it. Codes never appear in `controls`.
+Code IDs continue after the largest existing element ID. `rect` is the rounded min/max
+bounding rectangle of all four corners; `quad` contains top-left, top-right, bottom-right,
+bottom-left points. `center` is the rectangle center. `role` is `qr` for `QRCode` and
+`DataMatrix`, and `barcode` for `EAN13`, `EAN8`, `UPCA`, `UPCE`, `Code128`, `Code39` and `ITF`.
+Only these formats are enabled. `metadata.codes` reports `count`, `decoded`, `detected`,
+the observed `formats`, and `seconds`, matching `metadata.timing_seconds.codes`.
 
 ### JSON example
 

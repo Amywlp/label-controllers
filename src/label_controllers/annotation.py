@@ -29,6 +29,8 @@ ROLE_COLORS: dict[str, tuple[int, int, int]] = {
     "clickable": (249, 115, 22),
     "file_item": (234, 179, 8),
     "container": (120, 120, 120),
+    "qr": (217, 70, 239),
+    "barcode": (6, 182, 212),
 }
 
 
@@ -129,7 +131,7 @@ def render_annotation(
             outline=(*color, alpha),
             width=max(1, line_width - 1 if subtype == "container" else line_width),
         )
-        if subtype == "container":
+        if subtype == "container" or element.get("type") == "code":
             continue
         click_x, click_y = [int(round(v)) for v in element["click"]]
         draw.ellipse(
@@ -160,7 +162,10 @@ def render_annotation(
         if drawn_labels >= max_labels:
             break
         role = str(element.get("role") or "clickable")
-        text = _safe_label(str(element.get("label") or role))
+        if element.get("type") == "code":
+            text = _safe_label(element["symbology"] + ("?" if element["state"] == "detected" else ""))
+        else:
+            text = _safe_label(str(element.get("label") or role))
         label = f"#{element['id']} {text}"
         color = ROLE_COLORS.get(role) or ROLE_COLORS.get(str(element.get("subtype"))) or (236, 72, 153)
         placement = _place_badge(

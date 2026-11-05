@@ -16,6 +16,7 @@ GitHub 仓库：[Amywlp/label-controllers](https://github.com/Amywlp/label-contr
 - 可点击控件 JSON：文字、语义角色、置信度、矩形、中心点、安全点击点。
 - 全量元素 JSON：包含控件、纯文字区域和不可点击容器。
 - 控件文字 / OCR 文本块：独立文字、置信度和坐标。
+- 可选二维码 / 条码第四路：`include=codes` 启用 zxing-cpp，区分内容可用的 `decoded` 与仅检出位置的 `detected`；码区域加入 `elements`，不可点击且不进入 `controls`。
 - 标注 PNG：可通过二进制响应下载，也可作为 Base64 放入 JSON。
 - 原始 YOLO 与 OCR 结果：适合调试和二次融合。
 - 模型常驻内存，同一容器内无需为每次请求重新加载。
@@ -24,6 +25,7 @@ GitHub 仓库：[Amywlp/label-controllers](https://github.com/Amywlp/label-contr
 - 运行设备、显卡名称、OCR Execution Provider 和分阶段耗时均写入响应元数据。
 - 提供标准 OpenAI / Anthropic Tool Calling 定义、Python 执行器和命令行工具。
 - 可选无障碍树（a11y）第三路：`a11y` 参数合并 role/name/矩形，补上纯图标的语义与整块点击区。
+  a11y 是可选扩展（`websocket-client`），`cdp` 模式需要它，`inline` 模式不需要；官方镜像已包含该依赖。
 - 新增 `POST /api/v1/a11y/probe`：不传截图即可判断某页面/窗口的无障碍树是否可用。
 - 新增 MCP（stdio）服务 `label-controllers-mcp`，与 REST / Tool Calling 共用同一套能力。
 - 可选 API Key 鉴权、上传大小限制、像素限制、CORS、OpenAPI 文档。
@@ -58,6 +60,30 @@ curl http://127.0.0.1:8000/readyz
 - 能力清单：<http://127.0.0.1:8000/api/v1/capabilities>
 
 以上命令使用 CPU 推理镜像。GPU 部署方式如下。
+
+### 构建说明（中国网络）
+
+默认构建并启动服务：
+
+```bash
+docker compose up -d --build
+```
+
+在中国网络下，可通过构建参数分别指定国内 PyPI 镜像源和 torch 轮子镜像索引：
+
+```bash
+docker build \
+  --build-arg PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/ \
+  --build-arg PIP_TRUSTED_HOST=mirrors.aliyun.com \
+  --build-arg PIP_TORCH_INDEX_URL=https://mirror.sjtu.edu.cn/pytorch-wheels/cpu/ \
+  --build-arg PIP_TORCH_TRUSTED_HOST=mirror.sjtu.edu.cn \
+  -t label-controllers:local .
+```
+
+不传参数时使用官方 PyPI（`https://pypi.org/simple`），torch 仍取自
+`https://download.pytorch.org/whl/cpu`，行为与以前一致。
+
+依赖层先于源码层，所以只改源码时重建会命中依赖缓存，不需要重装依赖。
 
 ## GPU 加速
 

@@ -6,6 +6,7 @@ PUBLIC_INCLUDES = (
     "controls",
     "elements",
     "texts",
+    "codes",
     "metadata",
     "raw_icons",
     "raw_ocr",

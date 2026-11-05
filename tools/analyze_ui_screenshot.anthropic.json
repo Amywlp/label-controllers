@@ -6,13 +6,14 @@
     "properties": {
       "include": {
         "type": "array",
-        "description": "Result groups to return. Use controls for clickable targets, elements for all fused elements, texts for OCR, metadata for runtime/timing details, or annotated_image for a Base64-rendered PNG. Default: controls,texts,metadata.",
+        "description": "Result groups to return. Use controls for clickable targets, elements for all fused elements, texts for OCR, metadata for runtime/timing details, or annotated_image for a Base64-rendered PNG. Use codes for decoded/detected QR and barcode regions, never clickable. Default: controls,texts,metadata.",
         "items": {
           "type": "string",
           "enum": [
             "controls",
             "elements",
             "texts",
+            "codes",
             "metadata",
             "raw_icons",
             "raw_ocr",
