@@ -10,7 +10,7 @@ Pillow==12.3.0
 requests==2.34.2
 psutil==7.2.2
 fastapi==0.115.12
-uvicorn[standard]==0.34.3
+uvicorn[standard]==0.54.0
 python-multipart==0.0.20
 pyclipper==1.4.0
 six==1.17.0
