@@ -5,6 +5,12 @@ a tagged public release exists.
 
 ## [0.4.3] - 2026-11-05
 
+### Changed
+
+- Container publishing is now manual-only: `docker-publish.yml` no longer runs on pushes to
+  `main` or on version tags, so merging and tagging never publish an image to GHCR. Trigger it
+  from the Actions tab when a release is actually meant to be published.
+
 ### Fixed
 
 - Dockerfile now copies `src/` after the dependency layer, so editing source no longer invalidates

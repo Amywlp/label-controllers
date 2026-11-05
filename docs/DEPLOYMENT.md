@@ -146,8 +146,9 @@ docker compose up -d
 
 ## GitHub Container Registry
 
-`.github/workflows/docker-publish.yml` publishes `ghcr.io/<owner>/label-controllers` on
-pushes to `main`, version tags, and manual runs. It uses the repository-scoped
+`.github/workflows/docker-publish.yml` publishes `ghcr.io/<owner>/label-controllers`, but only
+when the workflow is dispatched manually from the Actions tab (`gh workflow run docker-publish.yml`).
+Merging to `main` and pushing version tags do not publish images. It uses the repository-scoped
 `GITHUB_TOKEN`; no personal Docker credential is stored in the repository.
 
 ## GitHub remote credentials
