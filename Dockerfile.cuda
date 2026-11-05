@@ -1,4 +1,4 @@
-﻿FROM python:3.10-slim-bookworm AS model
+FROM python:3.10-slim-bookworm AS model
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1
@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir requests==2.34.2 \
     && if [ -f /model-input/icon_detect.pt ]; then cp /model-input/icon_detect.pt /models/icon_detect.pt; fi \
     && python /download/download_model.py --output /models/icon_detect.pt
 
-FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime AS runtime
+FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime AS runtime
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1 \
