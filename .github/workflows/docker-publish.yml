@@ -1,9 +1,8 @@
 name: Publish container
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
+  # 发布是手工动作：合并到 main 与推送标签都不会自动把镜像推到 GHCR。
+  # 需要发布时在 Actions 页面（或 gh workflow run）手动触发本工作流。
   workflow_dispatch:
 
 permissions:

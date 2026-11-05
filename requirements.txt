@@ -1,3 +1,4 @@
+# Docker builds install torch/torchvision from PIP_TORCH_INDEX_URL first; this extra index is for local development installs.
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.4.1+cpu
 torchvision==0.19.1+cpu
@@ -12,3 +13,4 @@ psutil==7.2.2
 fastapi==0.115.12
 uvicorn[standard]==0.34.3
 python-multipart==0.0.20
+zxing-cpp==3.1.1

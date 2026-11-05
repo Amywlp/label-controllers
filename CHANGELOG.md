@@ -3,6 +3,47 @@
 All notable changes are documented here. The project follows semantic versioning once
 a tagged public release exists.
 
+## [0.4.3] - 2026-11-05
+
+### Changed
+
+- Container publishing is now manual-only: `docker-publish.yml` no longer runs on pushes to
+  `main` or on version tags, so merging and tagging never publish an image to GHCR. Trigger it
+  from the Actions tab when a release is actually meant to be published.
+
+### Fixed
+
+- Dockerfile now copies `src/` after the dependency layer, so editing source no longer invalidates
+  the ~2.5 GB dependency install (a one-file change previously cost a full re-install, measured at
+  over 23 minutes).
+
+### Added
+
+- Fourth recognition channel: QR and barcode regions powered by zxing-cpp 3.1.1, enabled by
+  `include=codes` or `include=all`. Decoded payloads and detected-but-undecodable symbols are
+  exposed as non-clickable code elements after the accessibility merge, with quadrilateral
+  coordinates, bounding rectangles, symbology and timing/count metadata.
+- Conservative format selection, degenerate/small-box filtering and overlap suppression to
+  reduce false detections; annotated images label undecodable symbols with a `?` suffix.
+- `PIP_TORCH_INDEX_URL` / `PIP_TORCH_TRUSTED_HOST` build args; torch and torchvision are installed
+  from a separate index so restricted networks can use a mirror (defaults unchanged).
+
+## [0.4.2] - 2026-11-05
+
+### Fixed
+
+- Docker image no longer skips the `[a11y]` extra dependencies: `--no-deps` silently dropped
+  `websocket-client`, so `a11y` mode `cdp` failed at runtime with `a11y_dependency_missing`.
+- Build no longer requires reaching pypi.org directly: `PIP_INDEX_URL` / `PIP_TRUSTED_HOST`
+  build args default to PyPI and can point at a mirror on restricted networks.
+- `__version__` reported `0.3.0` while `pyproject.toml` was `0.4.1`; both are now `0.4.2`, and the
+  CI quality job fails when the two drift apart.
+
+### Added
+
+- README / docs/DEPLOYMENT.md build notes for mirror usage and for the optional a11y dependency.
+- CI version-consistency check between `pyproject.toml` and `label_controllers.__version__`.
+
 ## [0.4.1] - 2026-10-31
 
 ### Fixed

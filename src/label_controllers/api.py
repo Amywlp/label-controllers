@@ -247,6 +247,7 @@ async def capabilities(request: Request) -> dict[str, Any]:
                 ),
                 "elements": "All fused elements, including non-clickable containers.",
                 "texts": "All OCR text blocks and their image coordinates.",
+                "codes": "Decoded/detected QR and barcode regions, never clickable; enabled only when requested.",
                 "metadata": "Model information, fused counts, timings and output field list.",
                 "raw_icons": "Raw OmniParser YOLO detections.",
                 "raw_ocr": "Raw RapidOCR detections.",
@@ -330,7 +331,8 @@ async def analyze(
         str,
         Form(
             description=(
-                "Comma-separated fields: controls, elements, texts, metadata, raw_icons, raw_ocr, annotated_image, all."
+                "Comma-separated fields: controls, elements, texts, codes, metadata, raw_icons, raw_ocr, "
+                "a11y, alignment, annotated_image, all."
             )
         ),
     ] = "controls,texts,metadata",
@@ -364,6 +366,7 @@ async def analyze(
 
     * `include=controls` returns only clickable controls plus request/image metadata.
     * `include=controls,texts,metadata` is the default.
+    * `include=codes` enables decoded/detected QR and barcode regions, which are never clickable.
     * `include=all` additionally returns raw model output and a base64 PNG.
     * `response_format=png` streams an annotated PNG directly.
     * Passing `a11y` merges accessibility roles/names/boxes into the same element list;
@@ -409,6 +412,7 @@ async def analyze(
             requested_includes.update({"alignment", "a11y"})
 
     engine: AnalysisEngine = request.app.state.engine
+    code_options = {"include_codes": True} if "codes" in requested_includes else {}
     try:
         result = await run_in_threadpool(
             engine.analyze,
@@ -419,6 +423,7 @@ async def analyze(
             ocr_confidence=ocr_confidence,
             render_annotated=response_format == "png" or "annotated_image" in requested_includes,
             a11y=a11y_spec,
+            **code_options,
         )
     except ImageTooLargeError as exc:
         return _error(request, 413, "upload_too_large", str(exc))

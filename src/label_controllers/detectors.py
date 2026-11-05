@@ -257,6 +257,117 @@ class TextDetector:
         return detections, elapsed
 
 
+CODE_FORMATS = ("QRCode", "DataMatrix", "EAN13", "EAN8", "UPCA", "UPCE", "Code128", "Code39", "ITF")
+
+
+def _filter_codes(codes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop degenerate/small quads and suppress overlapping code regions."""
+    candidates: list[tuple[float, dict[str, Any]]] = []
+    for code in codes:
+        points = code["quad"]
+        # Polygon area also rejects collinear points whose AABB has positive area.
+        area = abs(
+            sum(
+                points[i][0] * points[(i + 1) % 4][1] - points[(i + 1) % 4][0] * points[i][1]
+                for i in range(4)
+            )
+        ) / 2
+        if area == 0:
+            continue
+        x1, y1 = min(p[0] for p in points), min(p[1] for p in points)
+        x2, y2 = max(p[0] for p in points), max(p[1] for p in points)
+        width, height = x2 - x1, y2 - y1
+        box_area = width * height
+        if width < 8 or height < 8 or box_area < 256:
+            continue
+        rect = [int(round(v)) for v in (x1, y1, x2, y2)]
+        candidates.append(
+            (
+                box_area,
+                {
+                    **code,
+                    "rect": rect,
+                    "center": [int(round((rect[0] + rect[2]) / 2)), int(round((rect[1] + rect[3]) / 2))],
+                },
+            )
+        )
+
+    candidates.sort(key=lambda item: (item[1]["state"] == "decoded", item[0]), reverse=True)
+    kept: list[dict[str, Any]] = []
+    for _, code in candidates:
+        a = code["rect"]
+        a_area = (a[2] - a[0]) * (a[3] - a[1])
+        for prior in kept:
+            b = prior["rect"]
+            intersection = max(0, min(a[2], b[2]) - max(a[0], b[0])) * max(
+                0, min(a[3], b[3]) - max(a[1], b[1])
+            )
+            b_area = (b[2] - b[0]) * (b[3] - b[1])
+            if intersection / (a_area + b_area - intersection) > 0.5:
+                break
+        else:
+            kept.append(code)
+    return kept
+
+
+class CodeDetector:
+    """Detect decoded and undecodable symbols without treating them as controls."""
+
+    def predict(self, image_path: Path) -> tuple[list[dict[str, Any]], float]:
+        started = time.perf_counter()
+        # Keep the optional channel's native decoder unloaded until requested.
+        import zxingcpp
+
+        image = load_rgb(image_path)
+        formats = {getattr(zxingcpp.BarcodeFormat, name): name for name in CODE_FORMATS}
+        results = zxingcpp.read_barcodes(
+            image,
+            formats=list(formats),
+            return_errors=True,
+            try_rotate=True,
+            try_downscale=True,
+            try_invert=True,
+        )
+        codes: list[dict[str, Any]] = []
+        for result in results:
+            symbology = formats.get(result.format)
+            if symbology is None:
+                continue
+            position = result.position
+            points = (position.top_left, position.top_right, position.bottom_right, position.bottom_left)
+            codes.append(
+                {
+                    "text": result.text if result.valid else "",
+                    "type": "code",
+                    "role": "qr" if symbology in {"QRCode", "DataMatrix"} else "barcode",
+                    "confidence": None,
+                    "ocr_confidence": None,
+                    "clickable": False,
+                    "click": None,
+                    "source": "zxing",
+                    "state": "decoded" if result.valid else "detected",
+                    "symbology": symbology,
+                    "quad": [[p.x, p.y] for p in points],
+                }
+            )
+        codes = _filter_codes(codes)
+        # 检测四角点可能越出图像边界一两个像素，对外坐标一律钳进图内。
+        height, width = image.shape[:2]
+        for code in codes:
+            x1, y1, x2, y2 = code["rect"]
+            code["rect"] = [
+                max(0, min(x1, width)),
+                max(0, min(y1, height)),
+                max(0, min(x2, width)),
+                max(0, min(y2, height)),
+            ]
+            code["center"] = [
+                int(round((code["rect"][0] + code["rect"][2]) / 2)),
+                int(round((code["rect"][1] + code["rect"][3]) / 2)),
+            ]
+        return codes, time.perf_counter() - started
+
+
 def load_rgb(image_path: str | Path) -> np.ndarray:
     with Image.open(image_path) as image:
         return np.asarray(image.convert("RGB"))

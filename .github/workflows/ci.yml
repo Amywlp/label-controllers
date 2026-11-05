@@ -28,6 +28,21 @@ jobs:
         run: ruff check src scripts examples
       - name: Byte-compile
         run: python -m compileall -q src scripts examples
+      - name: Check version consistency
+        run: |
+          python - <<'PY'
+          import pathlib, re, sys
+          root = pathlib.Path(".")
+          pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
+          init = (root / "src/label_controllers/__init__.py").read_text(encoding="utf-8")
+          declared = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.MULTILINE)
+          runtime = re.search(r'__version__\s*=\s*"([^"]+)"', init)
+          if not declared or not runtime:
+              sys.exit("version string not found")
+          if declared.group(1) != runtime.group(1):
+              sys.exit(f"version drift: pyproject={declared.group(1)} __init__={runtime.group(1)}")
+          print(f"version ok: {declared.group(1)}")
+          PY
 
   docker-build:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'

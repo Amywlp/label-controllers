@@ -79,6 +79,36 @@ approximately 3.2 GB compressed PyTorch base layer that expands to approximately
 reserve at least 20 GB of free disk. Subsequent builds reuse cached layers unless the
 requirements or model downloader changes.
 
+### Behind a restricted network / 受限网络构建
+
+Build and start the default CPU service:
+
+```bash
+docker compose up -d --build
+```
+
+On a restricted network, such as in China, configure separate domestic PyPI and torch wheel indexes:
+
+```bash
+docker build \
+  --build-arg PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/ \
+  --build-arg PIP_TRUSTED_HOST=mirrors.aliyun.com \
+  --build-arg PIP_TORCH_INDEX_URL=https://mirror.sjtu.edu.cn/pytorch-wheels/cpu/ \
+  --build-arg PIP_TORCH_TRUSTED_HOST=mirror.sjtu.edu.cn \
+  -t label-controllers:local .
+```
+
+Without these build arguments, pip uses official PyPI (`https://pypi.org/simple`),
+and torch still comes from `https://download.pytorch.org/whl/cpu`, preserving the previous
+default behavior. The index build arguments only affect pip during the image build;
+they do not affect the running service.
+
+Dependency layers precede the source layer, so rebuilding after source-only edits reuses
+the dependency cache without reinstalling dependencies.
+
+The official image includes the optional `a11y` dependency (`websocket-client`).
+The `cdp` mode requires it; the `inline` mode does not.
+
 ## Resource sizing
 
 CPU inference is CPU-bound. For a small team, start with:
@@ -116,8 +146,9 @@ docker compose up -d
 
 ## GitHub Container Registry
 
-`.github/workflows/docker-publish.yml` publishes `ghcr.io/<owner>/label-controllers` on
-pushes to `main`, version tags, and manual runs. It uses the repository-scoped
+`.github/workflows/docker-publish.yml` publishes `ghcr.io/<owner>/label-controllers`, but only
+when the workflow is dispatched manually from the Actions tab (`gh workflow run docker-publish.yml`).
+Merging to `main` and pushing version tags do not publish images. It uses the repository-scoped
 `GITHUB_TOKEN`; no personal Docker credential is stored in the repository.
 
 ## GitHub remote credentials

@@ -17,7 +17,7 @@ from . import a11y as a11y_channel
 from .accelerator import resolve_ocr_provider, resolve_runtime_devices
 from .annotation import render_annotation
 from .config import Settings
-from .detectors import IconDetector, TextDetector
+from .detectors import CodeDetector, IconDetector, TextDetector
 from .fusion import fuse_elements
 
 
@@ -45,6 +45,7 @@ class AnalysisResult:
     annotated_png: bytes | None = field(default=None, repr=False)
     a11y: dict[str, Any] | None = None
     alignment: dict[str, Any] | None = None
+    codes: list[dict[str, Any]] = field(default_factory=list)
 
     def to_payload(self, includes: set[str]) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -62,6 +63,8 @@ class AnalysisResult:
             payload["elements"] = self.elements
         if "texts" in includes:
             payload["texts"] = self.texts
+        if "codes" in includes:
+            payload["codes"] = self.codes
         if "a11y" in includes and self.a11y is not None:
             payload["a11y"] = _public_a11y(self.a11y)
         if "alignment" in includes and self.alignment is not None:
@@ -196,6 +199,7 @@ class AnalysisEngine:
         icon_confidence: float | None = None,
         ocr_confidence: float | None = None,
         render_annotated: bool = False,
+        include_codes: bool = False,
         a11y: Mapping[str, Any] | str | None = None,
     ) -> AnalysisResult:
         if not image_bytes:
@@ -245,6 +249,14 @@ class AnalysisEngine:
                     elements, alignment = a11y_channel.merge(elements, a11y_section)
                     fusion_seconds += time.perf_counter() - alignment_started
 
+                codes: list[dict[str, Any]] = []
+                code_seconds = 0.0
+                if include_codes:
+                    codes, code_seconds = CodeDetector().predict(canonical_path)
+                    next_id = max((item["id"] for item in elements), default=0) + 1
+                    codes = [{"id": index, **code} for index, code in enumerate(codes, next_id)]
+                    elements.extend(codes)
+
                 controls = [item for item in elements if item["clickable"]]
                 ocr_public = [
                     {
@@ -261,7 +273,7 @@ class AnalysisEngine:
                 if render_annotated:
                     annotated_png = render_annotation(
                         canonical_path,
-                        fused["elements"],
+                        [*fused["elements"], *codes],
                         control_count=len(controls),
                         text_count=len(texts),
                     )
@@ -280,11 +292,19 @@ class AnalysisEngine:
                         "a11y_collect": round(a11y_seconds, 4),
                         "icon": round(icon_seconds, 4),
                         "ocr": round(ocr_seconds, 4),
+                        "codes": round(code_seconds, 4),
                         "fusion": round(fusion_seconds, 4),
                         "annotation": round(annotation_seconds, 4),
                         "total": round(total_seconds, 4),
                     },
                     "fused_counts": fused["counts"],
+                    "codes": {
+                        "count": len(codes),
+                        "decoded": sum(code["state"] == "decoded" for code in codes),
+                        "detected": sum(code["state"] == "detected" for code in codes),
+                        "formats": sorted({code["symbology"] for code in codes}),
+                        "seconds": round(code_seconds, 4),
+                    },
                     "a11y": {
                         "requested": bool(a11y),
                         "available": a11y_section is not None,
@@ -305,6 +325,7 @@ class AnalysisEngine:
                     controls=controls,
                     elements=elements,
                     texts=ocr_public,
+                    codes=codes,
                     raw_icons={
                         "model": self.settings.model_path.name,
                         "elapsed_seconds": round(icon_seconds, 4),
